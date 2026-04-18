@@ -4,7 +4,16 @@ import { type FormEvent, useEffect, useState } from "react";
 import { api, adminApi } from "@/lib/api";
 import { Service } from "@/lib/types";
 
-const empty = { name: "", description: "", image: "", basePrice: 0, duration: 0 };
+type ServiceForm = {
+  name: string;
+  description: string;
+  image: string;
+  basePrice: number;
+  duration: number;
+  followUpMonths: number | "";
+};
+
+const empty: ServiceForm = { name: "", description: "", image: "", basePrice: 0, duration: 0, followUpMonths: "" };
 
 export default function AdminServicesPage() {
   const [services, setServices] = useState<Service[]>([]);
@@ -17,12 +26,21 @@ export default function AdminServicesPage() {
   const load = () => api.get<Service[]>("/services").then((res) => setServices(res.data));
   useEffect(() => void load(), []);
 
+  const payloadFromForm = (f: ServiceForm) => ({
+    name: f.name,
+    description: f.description,
+    image: f.image,
+    basePrice: f.basePrice,
+    duration: f.duration,
+    followUpMonths: f.followUpMonths === "" ? null : Number(f.followUpMonths),
+  });
+
   const create = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
     setMessage(null);
     try {
-      await adminApi.post("/service", form);
+      await adminApi.post("/service", payloadFromForm(form));
       setForm(empty);
       await load();
       setMessage("Service added.");
@@ -55,6 +73,10 @@ export default function AdminServicesPage() {
       image: service.image,
       basePrice: service.basePrice,
       duration: service.duration,
+      followUpMonths:
+        service.followUpMonths != null && Number(service.followUpMonths) > 0
+          ? Number(service.followUpMonths)
+          : "",
     });
   };
 
@@ -63,7 +85,7 @@ export default function AdminServicesPage() {
     if (!editingId) return;
     setBusy(true);
     try {
-      await adminApi.put(`/service/${editingId}`, editForm);
+      await adminApi.put(`/service/${editingId}`, payloadFromForm(editForm));
       setEditingId(null);
       await load();
       setMessage("Service updated.");
@@ -119,6 +141,19 @@ export default function AdminServicesPage() {
           value={form.duration || ""}
           onChange={(e) => setForm({ ...form, duration: Number(e.target.value) })}
         />
+        <input
+          className="rounded-xl border p-3 md:col-span-2"
+          placeholder="Follow-up reminder (months after visit, e.g. 12 — optional)"
+          type="number"
+          min={1}
+          value={form.followUpMonths === "" ? "" : form.followUpMonths}
+          onChange={(e) =>
+            setForm({
+              ...form,
+              followUpMonths: e.target.value === "" ? "" : Number(e.target.value),
+            })
+          }
+        />
         <button type="submit" className="rounded-xl bg-black px-5 py-3 text-white disabled:opacity-50" disabled={busy}>
           Add Service
         </button>
@@ -163,6 +198,19 @@ export default function AdminServicesPage() {
                   onChange={(e) => setEditForm({ ...editForm, duration: Number(e.target.value) })}
                   required
                 />
+                <input
+                  className="rounded-xl border p-2 md:col-span-2"
+                  type="number"
+                  min={1}
+                  placeholder="Follow-up months (optional)"
+                  value={editForm.followUpMonths === "" ? "" : editForm.followUpMonths}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...editForm,
+                      followUpMonths: e.target.value === "" ? "" : Number(e.target.value),
+                    })
+                  }
+                />
                 <div className="flex flex-wrap gap-2 md:col-span-2">
                   <button type="submit" className="rounded-lg bg-black px-4 py-2 text-sm text-white" disabled={busy}>
                     Save
@@ -183,6 +231,9 @@ export default function AdminServicesPage() {
                   <p className="text-sm text-gray-600">{service.description}</p>
                   <p className="mt-1 text-xs text-gray-500">
                     Base ${service.basePrice} · {service.duration} min
+                    {service.followUpMonths != null && Number(service.followUpMonths) > 0
+                      ? ` · Next visit reminder +${service.followUpMonths} mo`
+                      : ""}
                   </p>
                 </div>
                 <div className="flex gap-2">

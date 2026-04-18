@@ -10,6 +10,7 @@ const JobCard = require("../models/JobCard");
 const Inspection = require("../models/Inspection");
 const { buildJobSheetPdfBuffer } = require("../utils/jobSheetPdf");
 const { buildInvoicePdfBuffer } = require("../utils/invoicePdf");
+const { buildCustomerDirectory } = require("../utils/customerDirectory");
 
 const router = express.Router();
 const upload = multer({ storage });
@@ -228,6 +229,56 @@ router.post("/bookings/:bookingId/email-job-sheet", async (req, res) => {
   } catch (e) {
     console.error("email-job-sheet:", e);
     res.status(500).json({ message: e.message || "Failed to send email" });
+  }
+});
+
+router.get("/customers", async (req, res) => {
+  try {
+    const { dateFrom, dateTo, q, phone } = req.query;
+    const data = await buildCustomerDirectory({
+      dateFrom: dateFrom ? String(dateFrom) : undefined,
+      dateTo: dateTo ? String(dateTo) : undefined,
+      q: q ? String(q) : undefined,
+      phone: phone ? String(phone) : undefined,
+    });
+    res.json(data);
+  } catch (e) {
+    console.error("GET /customers:", e);
+    res.status(500).json({ message: e.message || "Could not load customers." });
+  }
+});
+
+/** Manual outreach (offers, notes) — uses SMTP from backend/.env */
+router.post("/customers/send-email", async (req, res) => {
+  const { to, subject, text } = req.body || {};
+  if (!to || !subject || typeof text !== "string") {
+    return res.status(400).json({ message: "to, subject, and text are required." });
+  }
+  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    return res.status(400).json({
+      message: "SMTP is not configured. Add SMTP_HOST, SMTP_USER, SMTP_PASS to backend/.env.",
+    });
+  }
+  try {
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: Number(process.env.SMTP_PORT || 587),
+      secure: false,
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    });
+    await transporter.sendMail({
+      from: process.env.SMTP_FROM || "noreply@carcare.com",
+      to: String(to).trim(),
+      subject: String(subject).trim(),
+      text: text.trim(),
+    });
+    res.json({ ok: true, message: "Email sent." });
+  } catch (e) {
+    console.error("POST /customers/send-email:", e);
+    res.status(500).json({ message: e.message || "Failed to send email." });
   }
 });
 

@@ -5,7 +5,7 @@ const FAQS = [
   },
   {
     q: "Can I check my booking later?",
-    a: "Yes — use Track booking in the menu with your booking ID and the email you used when booking.",
+    a: "Yes — open Track booking in the menu and enter your booking ID plus the same email you used when booking. After your visit, you can download your invoice (PDF) from that page or from your confirmation page; you’ll be asked to confirm your email for security.",
   },
   {
     q: "What if I need to change my appointment?",

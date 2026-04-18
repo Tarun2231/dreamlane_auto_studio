@@ -11,7 +11,13 @@ const items = [
   { href: "/admin/services", label: "Services" },
   { href: "/admin/slots", label: "Slots" },
   { href: "/admin/bookings", label: "Bookings" },
+  { href: "/admin/customers", label: "Customers" },
 ];
+
+function navActive(href: string, pathname: string) {
+  if (href === "/admin") return pathname === "/admin" || pathname === "/admin/";
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
 
 export default function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -66,7 +72,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
                 key={item.href}
                 href={item.href}
                 className={`block rounded-lg px-3 py-2.5 text-sm font-medium ${
-                  pathname === item.href ? "bg-black text-white" : "text-gray-700 hover:bg-black/5"
+                  navActive(item.href, pathname) ? "bg-black text-white" : "text-gray-700 hover:bg-black/5"
                 }`}
               >
                 {item.label}

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import AddToCalendarButton from "@/components/AddToCalendarButton";
+import InvoiceDownloadCard from "@/components/InvoiceDownloadCard";
 import { API_BASE } from "@/lib/api";
 import { Booking } from "@/lib/types";
 
@@ -60,6 +61,7 @@ export default async function BookingConfirmation({
             </dd>
           </div>
         </dl>
+        <InvoiceDownloadCard bookingId={booking._id} />
         <div className="flex flex-wrap items-center gap-3 pt-2">
           <AddToCalendarButton
             bookingId={booking._id}

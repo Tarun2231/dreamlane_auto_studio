@@ -11,6 +11,43 @@ type Inspection = {
   afterImages: { url: string }[];
 };
 
+function telHref(phone: string) {
+  return `tel:${phone.replace(/\s/g, "")}`;
+}
+
+function BookingCustomerSummary({ booking }: { booking: Booking }) {
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+        <span className="min-w-0">
+          <span className="text-zinc-500 dark:text-zinc-500">Email </span>
+          <a
+            href={`mailto:${booking.email}`}
+            className="font-medium text-amber-800 underline decoration-amber-800/30 underline-offset-2 hover:decoration-amber-800 dark:text-amber-400 dark:decoration-amber-400/30"
+          >
+            {booking.email}
+          </a>
+        </span>
+        <span>
+          <span className="text-zinc-500 dark:text-zinc-500">Phone </span>
+          <a
+            href={telHref(booking.phone)}
+            className="font-medium text-amber-800 underline decoration-amber-800/30 underline-offset-2 hover:decoration-amber-800 dark:text-amber-400 dark:decoration-amber-400/30"
+          >
+            {booking.phone}
+          </a>
+        </span>
+      </div>
+      <p className="text-sm text-zinc-700 dark:text-zinc-300">
+        <span className="text-zinc-500 dark:text-zinc-500">Vehicle </span>
+        <span className="font-medium text-zinc-900 dark:text-zinc-100">
+          {booking.vehicleType} · {booking.carModel}
+        </span>
+      </p>
+    </div>
+  );
+}
+
 export default function AdminBookingsPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [selected, setSelected] = useState<Booking | null>(null);
@@ -239,10 +276,20 @@ export default function AdminBookingsPage() {
       </p>
       <div className="grid gap-2">
         {bookings.map((booking) => (
-          <div key={booking._id} className="card flex flex-wrap items-center justify-between gap-2 p-4">
-            <div>
-              <p className="font-semibold">{booking.customerName} - {booking.serviceId?.name}</p>
-              <p className="text-sm text-gray-600 dark:text-zinc-400">{booking.date} {booking.time} | {booking.status}</p>
+          <div
+            key={booking._id}
+            className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
+          >
+            <div className="min-w-0 flex-1 space-y-2">
+              <div>
+                <p className="font-semibold text-zinc-900 dark:text-zinc-50">
+                  {booking.customerName} — {booking.serviceId?.name}
+                </p>
+                <p className="mt-0.5 text-sm text-gray-600 dark:text-zinc-400">
+                  {booking.date} {booking.time} · {booking.status}
+                </p>
+              </div>
+              <BookingCustomerSummary booking={booking} />
             </div>
             <div className="flex flex-wrap gap-2">
               {(["Pending", "In Progress", "Completed"] as const).map((status) => {
@@ -279,7 +326,21 @@ export default function AdminBookingsPage() {
       </div>
       {selected && (
         <div className="card space-y-3 p-5">
-          <h2 className="text-xl font-semibold">Job Card & Inspection ({selected._id})</h2>
+          <div>
+            <h2 className="text-xl font-semibold">Job Card & Inspection ({selected._id})</h2>
+            <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900/60">
+              <p className="text-xs font-bold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Customer</p>
+              <p className="mt-1 text-lg font-semibold text-zinc-900 dark:text-zinc-50">{selected.customerName}</p>
+              <div className="mt-3">
+                <BookingCustomerSummary booking={selected} />
+              </div>
+              <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
+                Service: <span className="font-medium text-zinc-700 dark:text-zinc-300">{selected.serviceId?.name}</span>
+                {" · "}
+                Slot: {selected.date} {selected.time}
+              </p>
+            </div>
+          </div>
           <p className="text-sm text-gray-600 dark:text-zinc-400">
             Before photos are <strong>required</strong> before you can set status to <strong>In Progress</strong>.
           </p>

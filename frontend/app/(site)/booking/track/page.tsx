@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import InvoiceDownloadCard from "@/components/InvoiceDownloadCard";
 import { api } from "@/lib/api";
 import type { Booking } from "@/lib/types";
 
@@ -90,6 +91,7 @@ export default function TrackBookingPage() {
               </dd>
             </div>
           </dl>
+          <InvoiceDownloadCard bookingId={booking._id} email={email.trim()} />
           <Link href={`/booking/confirmation/${booking._id}`} className="inline-block text-sm font-semibold text-amber-800 underline dark:text-amber-400">
             Open full confirmation page →
           </Link>

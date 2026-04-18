@@ -5,6 +5,7 @@ const Service = require("../models/Service");
 const Slot = require("../models/Slot");
 const Booking = require("../models/Booking");
 const User = require("../models/User");
+const { buildInvoicePdfBuffer } = require("../utils/invoicePdf");
 
 const router = express.Router();
 
@@ -128,6 +129,33 @@ router.post("/booking/lookup", async (req, res) => {
   const b = String(booking.email).trim().toLowerCase();
   if (a !== b) return res.status(404).json({ message: "Booking not found." });
   res.json(booking);
+});
+
+/**
+ * Same identity check as /booking/lookup — returns invoice PDF only when ID + email match.
+ */
+router.post("/booking/invoice", async (req, res) => {
+  const { id, email } = req.body || {};
+  if (!id || !email || typeof email !== "string") {
+    return res.status(400).json({ message: "Booking ID and email are required." });
+  }
+  if (!mongoose.isValidObjectId(String(id))) {
+    return res.status(404).json({ message: "Booking not found." });
+  }
+  const booking = await Booking.findById(id);
+  if (!booking) return res.status(404).json({ message: "Booking not found." });
+  const a = String(email).trim().toLowerCase();
+  const b = String(booking.email).trim().toLowerCase();
+  if (a !== b) return res.status(404).json({ message: "Booking not found." });
+  try {
+    const buf = await buildInvoicePdfBuffer(String(id));
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="invoice-${String(id)}.pdf"`);
+    res.send(buf);
+  } catch (e) {
+    const code = e.statusCode || 500;
+    res.status(code).json({ message: e.message || "Could not generate invoice PDF" });
+  }
 });
 
 module.exports = router;
