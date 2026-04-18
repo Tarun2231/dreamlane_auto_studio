@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { SITE_EMAIL, SITE_HOURS, SITE_LOCATION, SITE_NAME, SITE_PHONE } from "@/lib/site";
+import { SITE_EMAIL, SITE_HOURS, SITE_LOCATION, SITE_NAME, SITE_PHONE, SITE_WHATSAPP } from "@/lib/site";
 
 const footerLinks = [
   { href: "/", label: "Home" },
   { href: "/services", label: "Services" },
   { href: "/booking", label: "Booking" },
+  { href: "/booking/track", label: "Track booking" },
 ];
 
 export default function CustomerFooter() {
@@ -28,6 +29,18 @@ export default function CustomerFooter() {
             </a>
           </p>
           <p className="mt-1 text-xs text-gray-500 dark:text-zinc-500">{SITE_LOCATION}</p>
+          {SITE_WHATSAPP ? (
+            <p className="mt-2 text-sm">
+              <a
+                href={`https://wa.me/${SITE_WHATSAPP}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-gray-700 hover:underline dark:text-zinc-300"
+              >
+                WhatsApp
+              </a>
+            </p>
+          ) : null}
         </div>
         <div>
           <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Hours</p>

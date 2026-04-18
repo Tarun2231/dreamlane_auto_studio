@@ -21,10 +21,13 @@ Full-stack web app with two fully separate interfaces:
 ## Key Features
 - Customer flow: homepage, dynamic services, step booking, confirmation page
 - Admin flow: dashboard, service management, slot management, booking management
-- Job cards: services done, parts used, extra charges, notes
-- BEFORE/AFTER inspection media with Cloudinary upload and booking linkage
+- Job cards: services done, parts used, extra charges, notes; optional final payment amount on a booking
+- BEFORE/AFTER inspection photos (Cloudinary) with clear upload controls on the booking screen
 - Mandatory BEFORE images before setting a booking to `In Progress`
+- **PDF exports (admin):** branded **job sheet** (service summary, payment breakdown, before/after photos) and **invoice** (line items, discount env, bank block) — download or email to the customer when SMTP is configured
 - Customer never sees internal pricing logic/admin data
+
+Configure PDF/invoice branding and bank lines via `backend/.env` (see `backend/.env.example`: `JOB_SHEET_*`, `INVOICE_*`).
 
 ## Setup
 
@@ -120,5 +123,3 @@ npm run dev
 
 ### Stopping the servers
 Click the terminal that is running the process and press **Ctrl+C**. If you used two terminals, stop each one separately.
-
-# CarService18April2026

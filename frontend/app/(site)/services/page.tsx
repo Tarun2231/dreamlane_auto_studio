@@ -1,4 +1,4 @@
-import ServiceCard from "@/components/ServiceCard";
+import ServicesGrid from "@/components/ServicesGrid";
 import { API_BASE } from "@/lib/api";
 import { Service } from "@/lib/types";
 import Link from "next/link";
@@ -31,11 +31,7 @@ export default async function ServicesPage() {
             </Link>
           </div>
         ) : (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {services.map((service) => (
-              <ServiceCard key={service._id} service={service} />
-            ))}
-          </div>
+          <ServicesGrid services={services} />
         )}
       </main>
     </>

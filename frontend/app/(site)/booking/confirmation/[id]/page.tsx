@@ -1,4 +1,5 @@
 import Link from "next/link";
+import AddToCalendarButton from "@/components/AddToCalendarButton";
 import { API_BASE } from "@/lib/api";
 import { Booking } from "@/lib/types";
 
@@ -59,7 +60,16 @@ export default async function BookingConfirmation({
             </dd>
           </div>
         </dl>
-        <div className="flex flex-wrap gap-3 pt-2">
+        <div className="flex flex-wrap items-center gap-3 pt-2">
+          <AddToCalendarButton
+            bookingId={booking._id}
+            serviceName={booking.serviceId?.name ?? "Service"}
+            vehicleType={booking.vehicleType}
+            carModel={booking.carModel}
+            date={booking.date}
+            time={booking.time}
+            durationMinutes={booking.serviceId?.duration ?? 60}
+          />
           <Link href="/services" className="rounded-full bg-black px-5 py-2.5 text-sm font-medium text-white dark:bg-white dark:text-black">
             Browse services
           </Link>

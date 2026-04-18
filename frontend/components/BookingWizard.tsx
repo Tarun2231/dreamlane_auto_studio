@@ -10,6 +10,8 @@ import Link from "next/link";
 type FormState = {
   serviceId: string;
   vehicleType: "Hatchback" | "Sedan" | "SUV";
+  /** Stable reference to the slot row — avoids date/time string mismatches with the API. */
+  slotId: string;
   date: string;
   time: string;
   customerName: string;
@@ -21,6 +23,7 @@ type FormState = {
 const initialState: FormState = {
   serviceId: "",
   vehicleType: "Hatchback",
+  slotId: "",
   date: "",
   time: "",
   customerName: "",
@@ -46,7 +49,14 @@ export default function BookingWizard() {
     setSlotsLoading(true);
     try {
       const res = await api.get<Slot[]>("/slots");
-      setSlots(res.data.filter((s) => s.isAvailable));
+      const available = res.data.filter((s) => s.isAvailable);
+      setSlots(available);
+      setForm((f) => {
+        if (f.slotId && !available.some((s) => s._id === f.slotId)) {
+          return { ...f, slotId: "", date: "", time: "" };
+        }
+        return f;
+      });
     } catch {
       setError("Could not load time slots. Is the server running?");
     } finally {
@@ -80,9 +90,10 @@ export default function BookingWizard() {
   const stepValid = (): boolean => {
     if (step === 1) return Boolean(form.serviceId);
     if (step === 2) return true;
-    if (step === 3) return Boolean(form.date && form.time);
+    if (step === 3) return Boolean(form.slotId && form.date && form.time);
     if (step === 4) {
       return (
+        Boolean(form.slotId && form.date && form.time) &&
         form.customerName.trim().length > 1 &&
         form.phone.trim().length > 5 &&
         emailOk(form.email) &&
@@ -112,10 +123,20 @@ export default function BookingWizard() {
       const booking = await api.post("/booking", form);
       router.push(`/booking/confirmation/${booking.data._id}`);
     } catch (e: unknown) {
+      const err = e as {
+        response?: { status?: number; data?: { message?: string } | string };
+      };
+      const status = err?.response?.status;
+      const data = err?.response?.data;
       const msg =
-        typeof e === "object" && e !== null && "response" in e
-          ? (e as { response?: { data?: { message?: string } } }).response?.data?.message
-          : undefined;
+        typeof data === "string"
+          ? data
+          : typeof data === "object" && data !== null && "message" in data
+            ? data.message
+            : undefined;
+      if (status === 409) {
+        await loadSlots();
+      }
       setError(msg || "Booking failed. Try another slot or check your connection.");
     } finally {
       setLoading(false);
@@ -215,20 +236,29 @@ export default function BookingWizard() {
               </div>
               <select
                 className="w-full rounded-xl border border-gray-300 bg-white p-3 dark:border-zinc-600 dark:bg-zinc-800"
-                value={`${form.date}|${form.time}`}
+                value={form.slotId}
                 onChange={(e) => {
-                  const v = e.target.value;
-                  if (!v) {
-                    setForm({ ...form, date: "", time: "" });
+                  const id = e.target.value;
+                  if (!id) {
+                    setForm({ ...form, slotId: "", date: "", time: "" });
                     return;
                   }
-                  const [date, time] = v.split("|");
-                  setForm({ ...form, date, time });
+                  const picked = slots.find((s) => s._id === id);
+                  if (!picked) {
+                    setForm({ ...form, slotId: "", date: "", time: "" });
+                    return;
+                  }
+                  setForm({
+                    ...form,
+                    slotId: picked._id,
+                    date: picked.date,
+                    time: picked.time,
+                  });
                 }}
               >
                 <option value="">Choose available slot</option>
                 {slots.map((slot) => (
-                  <option key={slot._id} value={`${slot.date}|${slot.time}`}>
+                  <option key={slot._id} value={slot._id}>
                     {slot.date} — {slot.time}
                   </option>
                 ))}

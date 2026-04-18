@@ -1,6 +1,7 @@
 import Link from "next/link";
 import ServiceCard from "@/components/ServiceCard";
 import TrustFeatures from "@/components/TrustFeatures";
+import FaqSection from "@/components/FaqSection";
 import { API_BASE } from "@/lib/api";
 import { SITE_NAME, SITE_SHORT, SITE_TAGLINE } from "@/lib/site";
 import { Service } from "@/lib/types";
@@ -82,6 +83,8 @@ export default async function Home() {
             </div>
           )}
         </section>
+
+        <FaqSection />
 
         <section className="card mt-4 overflow-hidden bg-gradient-to-br from-zinc-900 to-zinc-800 p-8 text-center text-white dark:from-zinc-800 dark:to-zinc-900 md:p-10">
           <h2 className="text-xl font-bold md:text-2xl">Ready when you are</h2>

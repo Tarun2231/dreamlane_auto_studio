@@ -4,13 +4,22 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import ThemeToggle from "@/components/ThemeToggle";
-import { SITE_NAME, SITE_SHORT } from "@/lib/site";
+import { SITE_LOCATION, SITE_NAME, SITE_SHORT } from "@/lib/site";
 
 const links = [
   { href: "/", label: "Home" },
   { href: "/services", label: "Services" },
   { href: "/booking", label: "Booking" },
+  { href: "/booking/track", label: "Track" },
 ];
+
+function navActive(pathname: string, href: string) {
+  if (href === "/") return pathname === "/";
+  if (href === "/booking")
+    return pathname === "/booking" || pathname.startsWith("/booking/confirmation");
+  if (href === "/booking/track") return pathname.startsWith("/booking/track");
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
 
 export default function CustomerHeader() {
   const pathname = usePathname();
@@ -18,7 +27,7 @@ export default function CustomerHeader() {
 
   const linkClass = (href: string) =>
     `rounded-full px-4 py-2 text-sm font-medium transition ${
-      pathname === href
+      navActive(pathname, href)
         ? "bg-black text-white shadow-sm dark:bg-white dark:text-black"
         : "text-gray-700 hover:bg-black/5 dark:text-zinc-300 dark:hover:bg-white/10"
     }`;
@@ -49,7 +58,7 @@ export default function CustomerHeader() {
 
         <div className="flex items-center gap-2">
           <span className="hidden text-xs text-gray-500 sm:inline dark:text-zinc-500" title="Service area">
-            📍 Los Angeles
+            📍 {SITE_LOCATION}
           </span>
           <ThemeToggle />
           <button
