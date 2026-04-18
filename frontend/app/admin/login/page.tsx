@@ -54,12 +54,16 @@ export default function AdminLoginPage() {
       <div className="relative w-full max-w-md">
         <p className="text-center text-xs font-semibold uppercase tracking-[0.3em] text-amber-500/90">Staff only</p>
         <h1 className="mt-3 text-center text-2xl font-bold text-white">Admin sign in</h1>
-        <p className="mt-2 text-center text-sm text-slate-400">Manage services, slots, and bookings.</p>
+        <p className="mt-2 text-center text-sm text-slate-400">Manage services, slots, bookings, and customers.</p>
+        <ul className="mx-auto mt-4 max-w-sm list-inside list-disc text-left text-xs text-slate-500">
+          <li>Secure staff access to your operations panel</li>
+          <li>After sign-in, open Help in the sidebar for a quick tour</li>
+        </ul>
 
-        <form onSubmit={login} className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur-md">
+        <form onSubmit={login} className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur-md">
           <label className="block text-xs font-medium text-slate-300">Email</label>
           <input
-            className="mt-1 w-full rounded-xl border border-white/10 bg-white/10 px-3 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none ring-amber-500/30 focus:ring-2"
+            className="mt-1 min-h-11 w-full rounded-xl border border-white/10 bg-white/10 px-3 py-2.5 text-base text-white placeholder:text-slate-500 outline-none ring-amber-500/30 focus:ring-2 sm:text-sm"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             autoComplete="email"
@@ -67,7 +71,7 @@ export default function AdminLoginPage() {
           />
           <label className="mt-4 block text-xs font-medium text-slate-300">Password</label>
           <input
-            className="mt-1 w-full rounded-xl border border-white/10 bg-white/10 px-3 py-2.5 text-sm text-white outline-none ring-amber-500/30 focus:ring-2"
+            className="mt-1 min-h-11 w-full rounded-xl border border-white/10 bg-white/10 px-3 py-2.5 text-base text-white outline-none ring-amber-500/30 focus:ring-2 sm:text-sm"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}

@@ -5,7 +5,17 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { Service, Slot } from "@/lib/types";
+import SlotCalendarPicker from "@/components/SlotCalendarPicker";
 import Link from "next/link";
+import {
+  modelsForMake,
+  VEHICLE_MAKE_OPTIONS,
+  VEHICLE_YEARS,
+} from "@/lib/vehicleCatalog";
+
+function formatInr(n: number) {
+  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
+}
 
 type FormState = {
   serviceId: string;
@@ -17,7 +27,11 @@ type FormState = {
   customerName: string;
   phone: string;
   email: string;
+  carMake: string;
   carModel: string;
+  /** Select value before submit converts to number for API. */
+  vehicleYear: string;
+  chassisNumber: string;
 };
 
 const initialState: FormState = {
@@ -29,7 +43,10 @@ const initialState: FormState = {
   customerName: "",
   phone: "",
   email: "",
+  carMake: "",
   carModel: "",
+  vehicleYear: "",
+  chassisNumber: "",
 };
 
 const emailOk = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
@@ -87,9 +104,19 @@ export default function BookingWizard() {
     [services, form.serviceId]
   );
 
+  const modelOptions = useMemo(() => modelsForMake(form.carMake), [form.carMake]);
+
   const stepValid = (): boolean => {
     if (step === 1) return Boolean(form.serviceId);
-    if (step === 2) return true;
+    if (step === 2) {
+      const y = Number(form.vehicleYear);
+      return (
+        Boolean(form.carMake) &&
+        Boolean(form.carModel) &&
+        Number.isFinite(y) &&
+        Boolean(form.vehicleType)
+      );
+    }
     if (step === 3) return Boolean(form.slotId && form.date && form.time);
     if (step === 4) {
       return (
@@ -97,7 +124,7 @@ export default function BookingWizard() {
         form.customerName.trim().length > 1 &&
         form.phone.trim().length > 5 &&
         emailOk(form.email) &&
-        form.carModel.trim().length > 0
+        form.chassisNumber.trim().length >= 6
       );
     }
     return false;
@@ -120,7 +147,11 @@ export default function BookingWizard() {
     setLoading(true);
     setError(null);
     try {
-      const booking = await api.post("/booking", form);
+      const payload = {
+        ...form,
+        vehicleYear: Number(form.vehicleYear),
+      };
+      const booking = await api.post("/booking", payload);
       router.push(`/booking/confirmation/${booking.data._id}`);
     } catch (e: unknown) {
       const err = e as {
@@ -143,10 +174,29 @@ export default function BookingWizard() {
     }
   };
 
-  const stepLabels = ["Service", "Vehicle", "Schedule", "Your info"];
+  const stepLabels = ["Service", "Vehicle details", "Schedule", "Your details"];
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-10 md:py-14">
+      <nav className="mb-6 flex flex-wrap items-center justify-between gap-3 text-sm" aria-label="Breadcrumb">
+        <ol className="flex flex-wrap items-center gap-1.5 text-gray-500 dark:text-zinc-500">
+          <li>
+            <Link href="/" className="font-medium text-amber-800 hover:underline dark:text-amber-400">
+              Home
+            </Link>
+          </li>
+          <li aria-hidden className="text-gray-300 dark:text-zinc-600">
+            /
+          </li>
+          <li className="font-medium text-gray-900 dark:text-zinc-100">Booking</li>
+        </ol>
+        <Link
+          href="/booking/track"
+          className="rounded-full border border-black/10 bg-white px-3 py-1.5 text-xs font-semibold text-gray-800 shadow-sm transition hover:bg-black/5 dark:border-white/15 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
+        >
+          Track existing booking
+        </Link>
+      </nav>
       <div className="mb-8">
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-700 dark:text-amber-500">Booking</p>
         <h1 className="mt-2 text-3xl font-bold tracking-tight md:text-4xl">Schedule your visit</h1>
@@ -157,7 +207,7 @@ export default function BookingWizard() {
           {error}
         </div>
       )}
-      <div className="card p-6 md:p-8">
+      <div className="card p-4 sm:p-6 md:p-8">
         <div className="mb-6">
           <div className="mb-3 flex gap-1.5">
             {[1, 2, 3, 4].map((n) => (
@@ -167,7 +217,7 @@ export default function BookingWizard() {
               />
             ))}
           </div>
-          <div className="flex flex-wrap justify-between gap-2 text-xs font-medium text-gray-500 dark:text-zinc-500">
+          <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[11px] font-medium text-gray-500 sm:grid-cols-4 sm:text-xs dark:text-zinc-500">
             {stepLabels.map((label, i) => (
               <span key={label} className={step === i + 1 ? "text-zinc-900 dark:text-white" : ""}>
                 {i + 1}. {label}
@@ -190,34 +240,100 @@ export default function BookingWizard() {
                   or ask an admin to add listings.
                 </p>
               ) : (
-                <select
-                  className="w-full rounded-xl border border-gray-300 bg-white p-3 dark:border-zinc-600 dark:bg-zinc-800"
-                  value={form.serviceId}
-                  onChange={(e) => setForm({ ...form, serviceId: e.target.value })}
-                >
-                  <option value="">Choose one</option>
-                  {services.map((service) => (
-                    <option key={service._id} value={service._id}>
-                      {service.name} ({service.duration} min)
-                    </option>
-                  ))}
-                </select>
+                <>
+                  <select
+                    className="w-full rounded-xl border border-gray-300 bg-white p-3 dark:border-zinc-600 dark:bg-zinc-800"
+                    value={form.serviceId}
+                    onChange={(e) => setForm({ ...form, serviceId: e.target.value })}
+                  >
+                    <option value="">Choose one</option>
+                    {services.map((service) => (
+                      <option key={service._id} value={service._id}>
+                        {service.name} ({service.duration} min)
+                      </option>
+                    ))}
+                  </select>
+                  {selectedService && (
+                    <p className="text-sm text-gray-600 dark:text-zinc-400">
+                      From <span className="font-semibold text-gray-900 dark:text-zinc-100">{formatInr(selectedService.basePrice)}</span>
+                      {" · "}
+                      <span>~{selectedService.duration} min on the hoist</span>
+                    </p>
+                  )}
+                </>
               )}
             </div>
           )}
 
           {step === 2 && (
-            <div className="space-y-3">
-              <h2 className="font-semibold">Select Vehicle Type</h2>
-              <select
-                className="w-full rounded-xl border border-gray-300 bg-white p-3 dark:border-zinc-600 dark:bg-zinc-800"
-                value={form.vehicleType}
-                onChange={(e) => setForm({ ...form, vehicleType: e.target.value as FormState["vehicleType"] })}
-              >
-                <option>Hatchback</option>
-                <option>Sedan</option>
-                <option>SUV</option>
-              </select>
+            <div className="space-y-4">
+              <div>
+                <h2 className="font-semibold">Vehicle details</h2>
+                <p className="mt-1 text-sm text-gray-600 dark:text-zinc-400">
+                  Choose body type, brand, model, and year from the lists. Chassis number (from your RC) is entered on the next step.
+                </p>
+              </div>
+              <label className="block space-y-1.5">
+                <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-zinc-500">Body type</span>
+                <select
+                  className="w-full rounded-xl border border-gray-300 bg-white p-3 dark:border-zinc-600 dark:bg-zinc-800"
+                  value={form.vehicleType}
+                  onChange={(e) => setForm({ ...form, vehicleType: e.target.value as FormState["vehicleType"] })}
+                >
+                  <option value="Hatchback">Hatchback</option>
+                  <option value="Sedan">Sedan</option>
+                  <option value="SUV">SUV</option>
+                </select>
+              </label>
+              <label className="block space-y-1.5">
+                <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-zinc-500">Company / make</span>
+                <select
+                  className="w-full rounded-xl border border-gray-300 bg-white p-3 dark:border-zinc-600 dark:bg-zinc-800"
+                  value={form.carMake}
+                  onChange={(e) => {
+                    const make = e.target.value;
+                    setForm((f) => ({ ...f, carMake: make, carModel: "" }));
+                  }}
+                >
+                  <option value="">Select make</option>
+                  {VEHICLE_MAKE_OPTIONS.map((make) => (
+                    <option key={make} value={make}>
+                      {make}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block space-y-1.5">
+                <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-zinc-500">Model</span>
+                <select
+                  className="w-full rounded-xl border border-gray-300 bg-white p-3 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-800"
+                  value={form.carModel}
+                  disabled={!form.carMake}
+                  onChange={(e) => setForm({ ...form, carModel: e.target.value })}
+                >
+                  <option value="">{form.carMake ? "Select model" : "Select make first"}</option>
+                  {modelOptions.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block space-y-1.5">
+                <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-zinc-500">Year</span>
+                <select
+                  className="w-full rounded-xl border border-gray-300 bg-white p-3 dark:border-zinc-600 dark:bg-zinc-800"
+                  value={form.vehicleYear}
+                  onChange={(e) => setForm({ ...form, vehicleYear: e.target.value })}
+                >
+                  <option value="">Select year</option>
+                  {VEHICLE_YEARS.map((y) => (
+                    <option key={y} value={String(y)}>
+                      {y}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
           )}
 
@@ -234,40 +350,20 @@ export default function BookingWizard() {
                   {slotsLoading ? "Refreshing…" : "Refresh slots"}
                 </button>
               </div>
-              <select
-                className="w-full rounded-xl border border-gray-300 bg-white p-3 dark:border-zinc-600 dark:bg-zinc-800"
-                value={form.slotId}
-                onChange={(e) => {
-                  const id = e.target.value;
-                  if (!id) {
-                    setForm({ ...form, slotId: "", date: "", time: "" });
-                    return;
-                  }
-                  const picked = slots.find((s) => s._id === id);
-                  if (!picked) {
-                    setForm({ ...form, slotId: "", date: "", time: "" });
-                    return;
-                  }
+              <SlotCalendarPicker
+                slots={slots}
+                loading={slotsLoading}
+                selectedSlotId={form.slotId}
+                onSelectSlot={(slot) =>
                   setForm({
                     ...form,
-                    slotId: picked._id,
-                    date: picked.date,
-                    time: picked.time,
-                  });
-                }}
-              >
-                <option value="">Choose available slot</option>
-                {slots.map((slot) => (
-                  <option key={slot._id} value={slot._id}>
-                    {slot.date} — {slot.time}
-                  </option>
-                ))}
-              </select>
-              {slots.length === 0 && !slotsLoading && (
-                <p className="text-sm text-amber-800 dark:text-amber-200">
-                  No open slots right now. Ask the shop to add availability, then tap Refresh.
-                </p>
-              )}
+                    slotId: slot._id,
+                    date: slot.date,
+                    time: slot.time,
+                  })
+                }
+                onClearSlot={() => setForm({ ...form, slotId: "", date: "", time: "" })}
+              />
               {selectedService && (
                 <p className="text-sm text-gray-500 dark:text-zinc-400">
                   Estimated service duration: {selectedService.duration} minutes
@@ -279,6 +375,14 @@ export default function BookingWizard() {
           {step === 4 && (
             <div className="grid gap-3">
               <h2 className="font-semibold">Your details</h2>
+              <div className="rounded-xl border border-black/10 bg-black/[0.02] p-4 text-sm dark:border-white/10 dark:bg-white/[0.04]">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-zinc-500">Vehicle (from step 2)</p>
+                <p className="mt-2 font-medium text-gray-900 dark:text-zinc-100">
+                  {form.carMake} {form.carModel}
+                  {form.vehicleYear ? ` · ${form.vehicleYear}` : ""}
+                </p>
+                <p className="mt-1 text-gray-600 dark:text-zinc-400">{form.vehicleType}</p>
+              </div>
               <input
                 className="rounded-xl border border-gray-300 bg-white p-3 dark:border-zinc-600 dark:bg-zinc-800"
                 placeholder="Full name"
@@ -302,19 +406,29 @@ export default function BookingWizard() {
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
                 autoComplete="email"
               />
-              <input
-                className="rounded-xl border border-gray-300 bg-white p-3 dark:border-zinc-600 dark:bg-zinc-800"
-                placeholder="Car model"
-                value={form.carModel}
-                onChange={(e) => setForm({ ...form, carModel: e.target.value })}
-              />
+              <label className="block space-y-1.5">
+                <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-zinc-500">
+                  Chassis number (as on RC)
+                </span>
+                <input
+                  className="w-full rounded-xl border border-gray-300 bg-white p-3 font-mono text-sm dark:border-zinc-600 dark:bg-zinc-800"
+                  placeholder="Enter chassis number from your registration certificate"
+                  value={form.chassisNumber}
+                  onChange={(e) => setForm({ ...form, chassisNumber: e.target.value })}
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+              </label>
+              <p className="text-xs text-gray-500 dark:text-zinc-500">
+                Mandatory for ordering the correct parts — copy exactly as printed on your RC (usually near engine/chassis details).
+              </p>
             </div>
           )}
 
-          <div className="mt-6 flex flex-wrap justify-between gap-3">
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
             <button
               type="button"
-              className="rounded-full px-5 py-2 text-sm hover:bg-black/5 disabled:opacity-40 dark:hover:bg-white/10"
+              className="min-h-11 rounded-full px-5 py-2.5 text-sm hover:bg-black/5 disabled:opacity-40 dark:hover:bg-white/10"
               disabled={step === 1}
               onClick={() => {
                 setError(null);
@@ -326,7 +440,7 @@ export default function BookingWizard() {
             {step < 4 ? (
               <button
                 type="button"
-                className="btn-primary min-h-[40px] px-6 disabled:opacity-40"
+                className="btn-primary min-h-11 px-6 disabled:opacity-40"
                 onClick={goNext}
                 disabled={!stepValid()}
               >
@@ -335,7 +449,7 @@ export default function BookingWizard() {
             ) : (
               <button
                 type="button"
-                className="btn-primary min-h-[40px] px-6 disabled:opacity-50"
+                className="btn-primary min-h-11 px-6 disabled:opacity-50"
                 onClick={() => void submit()}
                 disabled={loading || !stepValid()}
               >

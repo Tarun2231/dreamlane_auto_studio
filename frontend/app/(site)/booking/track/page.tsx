@@ -36,7 +36,7 @@ export default function TrackBookingPage() {
         Enter the booking ID from your confirmation page and the email you used when booking.
       </p>
 
-      <form onSubmit={submit} className="card mt-8 space-y-4 p-6">
+      <form onSubmit={submit} className="card mt-8 space-y-4 p-4 sm:p-6">
         <div>
           <label className="mb-1 block text-sm font-medium">Booking ID</label>
           <input
@@ -67,27 +67,34 @@ export default function TrackBookingPage() {
       </form>
 
       {booking && (
-        <div className="card mt-6 space-y-4 p-6">
+        <div className="card mt-6 space-y-4 p-4 sm:p-6">
           <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Found</p>
-          <dl className="space-y-2 text-sm">
-            <div className="flex justify-between gap-4">
-              <dt className="text-gray-500 dark:text-zinc-500">Status</dt>
-              <dd className="font-medium">{booking.status}</dd>
+          <dl className="space-y-3 text-sm">
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between sm:gap-4">
+              <dt className="shrink-0 text-gray-500 dark:text-zinc-500">Status</dt>
+              <dd className="min-w-0 font-medium sm:text-right">{booking.status}</dd>
             </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-gray-500 dark:text-zinc-500">Service</dt>
-              <dd className="font-medium">{booking.serviceId?.name}</dd>
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between sm:gap-4">
+              <dt className="shrink-0 text-gray-500 dark:text-zinc-500">Service</dt>
+              <dd className="min-w-0 break-words font-medium sm:max-w-[70%] sm:text-right">{booking.serviceId?.name}</dd>
             </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-gray-500 dark:text-zinc-500">Slot</dt>
-              <dd>
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between sm:gap-4">
+              <dt className="shrink-0 text-gray-500 dark:text-zinc-500">Slot</dt>
+              <dd className="min-w-0 sm:text-right">
                 {booking.date} at {booking.time}
               </dd>
             </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-gray-500 dark:text-zinc-500">Vehicle</dt>
-              <dd>
-                {booking.vehicleType} · {booking.carModel}
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between sm:gap-4">
+              <dt className="shrink-0 text-gray-500 dark:text-zinc-500">Vehicle</dt>
+              <dd className="min-w-0 break-words sm:text-right">
+                {[booking.carMake, booking.carModel].filter(Boolean).join(" ") || booking.carModel}
+                {booking.vehicleYear != null ? ` · ${booking.vehicleYear}` : ""}
+                <span className="block text-xs font-normal text-gray-500 dark:text-zinc-500">
+                  {booking.vehicleType}
+                  {booking.chassisNumber || booking.registrationNumber
+                    ? ` · Chassis: ${booking.chassisNumber || booking.registrationNumber}`
+                    : ""}
+                </span>
               </dd>
             </div>
           </dl>

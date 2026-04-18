@@ -58,7 +58,11 @@ async function buildCustomerDirectory({ dateFrom, dateTo, q, phone } = {}) {
       time: b.time,
       status: b.status,
       vehicleType: b.vehicleType,
+      carMake: b.carMake || "",
       carModel: b.carModel,
+      vehicleYear: b.vehicleYear,
+      chassisNumber: b.chassisNumber || "",
+      registrationNumber: b.registrationNumber || "",
       finalAmount: b.finalAmount,
       service: serviceLite,
     };
@@ -111,12 +115,28 @@ async function buildCustomerDirectory({ dateFrom, dateTo, q, phone } = {}) {
 
   const qq = q ? String(q).trim().toLowerCase() : "";
   if (qq) {
-    list = list.filter(
-      (c) =>
+    list = list.filter((c) => {
+      if (
         c.customerName.toLowerCase().includes(qq) ||
         c.email.toLowerCase().includes(qq) ||
         c.emailNorm.includes(qq)
-    );
+      ) {
+        return true;
+      }
+      const qFlat = qq.replace(/\s/g, "");
+      return c.bookings.some((b) => {
+        const m = (b.carModel || "").toLowerCase();
+        const mk = (b.carMake || "").toLowerCase();
+        const reg = (b.registrationNumber || "").toLowerCase().replace(/\s/g, "");
+        const ch = (b.chassisNumber || "").toLowerCase().replace(/\s/g, "");
+        return (
+          m.includes(qq) ||
+          mk.includes(qq) ||
+          (reg && reg.includes(qFlat)) ||
+          (ch && ch.includes(qFlat))
+        );
+      });
+    });
   }
 
   const phoneFilter = phone ? String(phone).trim().replace(/\D/g, "") : "";

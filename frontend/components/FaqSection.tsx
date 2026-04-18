@@ -1,7 +1,7 @@
 const FAQS = [
   {
     q: "How do I book a slot?",
-    a: "Choose a service, pick vehicle type, select an available date and time, then enter your contact details. You’ll get a confirmation page with your booking ID.",
+    a: "Choose a service, then pick vehicle body type, make, model, and year from the lists, choose a slot, and enter your contact details plus your chassis number from your RC (typed manually — we need it for correct parts). You’ll get a confirmation page with your booking ID.",
   },
   {
     q: "Can I check my booking later?",
@@ -14,6 +14,18 @@ const FAQS = [
   {
     q: "Do you service all vehicle types?",
     a: "We support common body types (hatchback, sedan, SUV) listed in the booking flow. Ask us if you’re unsure.",
+  },
+  {
+    q: "What should I bring or prepare?",
+    a: "Have your registration or insurance handy if we’re doing work that needs it; remove valuables from the cabin. Tell us about any warning lights or noises when you drop off.",
+  },
+  {
+    q: "How is pricing decided?",
+    a: "Each service package lists a starting price on the site. Final billing can include parts, extra labor, or add-ons — your invoice reflects what was done on the day.",
+  },
+  {
+    q: "Can I get a quotation before I book?",
+    a: "Yes — use Get quote in the menu. Select your vehicle (same lists as booking), pick a service package from our workshop or choose Custom work, add parts notes if needed, and submit. We’ll email a quotation; you can accept it on Track quote, then book a slot.",
   },
 ];
 

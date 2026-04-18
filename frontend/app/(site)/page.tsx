@@ -1,5 +1,7 @@
 import Link from "next/link";
 import ServiceCard from "@/components/ServiceCard";
+import HowItWorksSection from "@/components/HowItWorksSection";
+import MaintenanceTipsSection from "@/components/MaintenanceTipsSection";
 import TrustFeatures from "@/components/TrustFeatures";
 import FaqSection from "@/components/FaqSection";
 import { API_BASE } from "@/lib/api";
@@ -44,6 +46,12 @@ export default async function Home() {
               >
                 Browse services
               </Link>
+              <Link
+                href="/quote"
+                className="inline-flex min-h-[44px] items-center justify-center rounded-full border border-white/20 px-8 py-3 text-sm font-semibold text-white/95 transition hover:bg-white/10"
+              >
+                Get a custom quote
+              </Link>
             </div>
           </div>
         </div>
@@ -51,6 +59,8 @@ export default async function Home() {
       </section>
 
       <TrustFeatures />
+
+      <HowItWorksSection />
 
       <main className="mx-auto w-full max-w-6xl space-y-4 px-4 py-14 md:py-16">
         <section className="space-y-6">
@@ -83,6 +93,8 @@ export default async function Home() {
             </div>
           )}
         </section>
+
+        <MaintenanceTipsSection />
 
         <FaqSection />
 

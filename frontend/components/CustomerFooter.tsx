@@ -4,6 +4,7 @@ import { SITE_EMAIL, SITE_HOURS, SITE_LOCATION, SITE_NAME, SITE_PHONE, SITE_WHAT
 const footerLinks = [
   { href: "/", label: "Home" },
   { href: "/services", label: "Services" },
+  { href: "/quote", label: "Get quote" },
   { href: "/booking", label: "Booking" },
   { href: "/booking/track", label: "Track booking" },
 ];

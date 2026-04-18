@@ -9,6 +9,7 @@ import { SITE_LOCATION, SITE_NAME, SITE_SHORT } from "@/lib/site";
 const links = [
   { href: "/", label: "Home" },
   { href: "/services", label: "Services" },
+  { href: "/quote", label: "Get quote" },
   { href: "/booking", label: "Booking" },
   { href: "/booking/track", label: "Track" },
 ];
@@ -18,6 +19,7 @@ function navActive(pathname: string, href: string) {
   if (href === "/booking")
     return pathname === "/booking" || pathname.startsWith("/booking/confirmation");
   if (href === "/booking/track") return pathname.startsWith("/booking/track");
+  if (href === "/quote") return pathname === "/quote" || pathname.startsWith("/quote/");
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -35,11 +37,15 @@ export default function CustomerHeader() {
   return (
     <header className="customer-header shadow-sm shadow-black/5 dark:shadow-black/20">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3.5 md:py-4">
-        <Link href="/" className="group flex flex-col leading-tight" onClick={() => setOpen(false)}>
+        <Link
+          href="/"
+          className="group flex min-w-0 max-w-[min(100%,14rem)] flex-col leading-tight sm:max-w-none"
+          onClick={() => setOpen(false)}
+        >
           <span className="text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-700 dark:text-amber-400">
             {SITE_SHORT}
           </span>
-          <span className="text-lg font-bold tracking-tight">{SITE_NAME}</span>
+          <span className="truncate text-lg font-bold tracking-tight">{SITE_NAME}</span>
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex">

@@ -131,7 +131,7 @@ async function buildJobSheetPdfBuffer(bookingId) {
   y += 84;
 
   // —— CUSTOMER + VEHICLE (two columns) ——
-  const boxH = 100;
+  const boxH = 126;
   doc.roundedRect(leftX, y, colW, boxH, 6).stroke(cardBorder);
   doc.roundedRect(rightX, y, colW, boxH, 6).stroke(cardBorder);
 
@@ -145,9 +145,14 @@ async function buildJobSheetPdfBuffer(bookingId) {
   doc.rect(rightX, y, 4, 24).fill(accent);
   doc.font("Helvetica-Bold").fontSize(10).text("Vehicle Details", rightX + 12, y + 6);
   doc.font("Helvetica").fontSize(9);
-  doc.text(`Car / model: ${booking.carModel}`, rightX + 12, y + 28, { width: colW - 20 });
-  doc.text(`Type: ${booking.vehicleType}`, rightX + 12, y + 42, { width: colW - 20 });
-  doc.fillColor(muted).fontSize(8).text("Reg / fuel: add fields in admin if needed", rightX + 12, y + 58, { width: colW - 20 });
+  const mk = booking.carMake || "—";
+  const chassis = booking.chassisNumber || booking.registrationNumber || "—";
+  const yr = booking.vehicleYear != null && Number.isFinite(Number(booking.vehicleYear)) ? String(booking.vehicleYear) : "—";
+  doc.text(`Make: ${mk}`, rightX + 12, y + 28, { width: colW - 20 });
+  doc.text(`Model: ${booking.carModel}`, rightX + 12, y + 42, { width: colW - 20 });
+  doc.text(`Year: ${yr}`, rightX + 12, y + 56, { width: colW - 20 });
+  doc.text(`Body type: ${booking.vehicleType}`, rightX + 12, y + 70, { width: colW - 20 });
+  doc.text(`Chassis (RC): ${chassis}`, rightX + 12, y + 84, { width: colW - 20 });
   doc.fillColor("#333333");
 
   y += boxH + 12;

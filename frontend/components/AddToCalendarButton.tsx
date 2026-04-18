@@ -7,7 +7,12 @@ type Props = {
   bookingId: string;
   serviceName: string;
   vehicleType: string;
+  carMake?: string;
   carModel: string;
+  vehicleYear?: number;
+  chassisNumber?: string;
+  /** @deprecated */
+  registrationNumber?: string;
   date: string;
   time: string;
   durationMinutes: number;
@@ -17,14 +22,22 @@ export default function AddToCalendarButton({
   bookingId,
   serviceName,
   vehicleType,
+  carMake,
   carModel,
+  vehicleYear,
+  chassisNumber,
+  registrationNumber,
   date,
   time,
   durationMinutes,
 }: Props) {
   const download = () => {
     const title = `${SITE_NAME} — ${serviceName}`;
-    const description = `Booking ID: ${bookingId}\n${vehicleType} · ${carModel}`;
+    const vehicleLine = [carMake, carModel].filter(Boolean).join(" ").trim() || carModel;
+    const yearPart = vehicleYear != null ? ` (${vehicleYear})` : "";
+    const chassisLine = chassisNumber || registrationNumber;
+    const chassisPart = chassisLine ? `\nChassis (RC): ${chassisLine}` : "";
+    const description = `Booking ID: ${bookingId}\n${vehicleLine}${yearPart}\n${vehicleType}${chassisPart}`;
     const ics = buildBookingIcs({
       uid: bookingId,
       title,

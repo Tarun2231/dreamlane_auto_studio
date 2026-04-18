@@ -18,6 +18,26 @@
 
 html {
   scroll-behavior: smooth;
+  overflow-x: clip;
+}
+
+/* Faster tap response on touch devices */
+button,
+[role="button"],
+a[href],
+input[type="submit"],
+input[type="button"],
+label[for] {
+  touch-action: manipulation;
+}
+
+/* iOS Safari: avoid auto-zoom on focus when inputs use small font sizes */
+@media (max-width: 768px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

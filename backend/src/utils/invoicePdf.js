@@ -135,7 +135,7 @@ async function buildInvoicePdfBuffer(bookingId) {
 
   // —— BILL TO + INVOICE INFO ——
   const colW = (pageW - 16) / 2;
-  const cardH = 88;
+  const cardH = 102;
   doc.roundedRect(leftX, y, colW, cardH, 10).stroke("#eeeeee");
   doc.roundedRect(leftX + colW + 16, y, colW, cardH, 10).stroke("#eeeeee");
 
@@ -144,6 +144,17 @@ async function buildInvoicePdfBuffer(bookingId) {
   doc.font("Helvetica").fontSize(10).fillColor("#333333");
   doc.text(`Phone: ${booking.phone}`, leftX + 14, y + 42, { width: colW - 28 });
   doc.text(`Email: ${booking.email}`, leftX + 14, y + 56, { width: colW - 28 });
+  const yr =
+    booking.vehicleYear != null && Number.isFinite(Number(booking.vehicleYear))
+      ? ` (${Number(booking.vehicleYear)})`
+      : "";
+  const vehLine = [booking.carMake, booking.carModel].filter(Boolean).join(" ").trim();
+  const chassis =
+    booking.chassisNumber || booking.registrationNumber
+      ? ` · Chassis: ${booking.chassisNumber || booking.registrationNumber}`
+      : "";
+  doc.font("Helvetica").fontSize(8).fillColor(muted);
+  doc.text(`Vehicle: ${vehLine || "—"}${yr}${chassis}`, leftX + 14, y + 72, { width: colW - 28 });
 
   doc.font("Helvetica-Bold").fontSize(9).fillColor("#888888").text("Invoice Info", leftX + colW + 30, y + 10);
   doc.font("Helvetica").fontSize(10).fillColor("#333333");

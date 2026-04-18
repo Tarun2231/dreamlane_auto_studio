@@ -33,7 +33,7 @@ export default async function BookingConfirmation({
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-10 md:py-14">
-      <div className="card space-y-5 p-8 shadow-lg">
+      <div className="card space-y-5 p-4 shadow-lg sm:p-6 md:p-8">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Confirmed</p>
           <h1 className="mt-1 text-3xl font-bold">You&apos;re booked</h1>
@@ -42,17 +42,28 @@ export default async function BookingConfirmation({
           </p>
         </div>
         <dl className="space-y-3 border-t border-black/5 pt-6 text-sm dark:border-white/10">
-          <div className="flex justify-between gap-4">
-            <dt className="text-gray-500 dark:text-zinc-500">Booking ID</dt>
-            <dd className="font-mono text-right text-xs">{booking._id}</dd>
+          <div className="flex flex-col gap-1 sm:flex-row sm:justify-between sm:gap-4">
+            <dt className="shrink-0 text-gray-500 dark:text-zinc-500">Booking ID</dt>
+            <dd className="break-all font-mono text-sm sm:text-right sm:text-xs">{booking._id}</dd>
           </div>
           <div className="flex justify-between gap-4">
             <dt className="text-gray-500 dark:text-zinc-500">Service</dt>
             <dd className="font-medium">{booking.serviceId?.name}</dd>
           </div>
-          <div className="flex justify-between gap-4">
-            <dt className="text-gray-500 dark:text-zinc-500">Vehicle</dt>
-            <dd>{booking.vehicleType}</dd>
+          <div className="flex flex-col gap-1 sm:flex-row sm:justify-between sm:gap-4">
+            <dt className="shrink-0 text-gray-500 dark:text-zinc-500">Vehicle</dt>
+            <dd className="text-right sm:max-w-[70%]">
+              <span className="font-medium text-gray-900 dark:text-zinc-100">
+                {[booking.carMake, booking.carModel].filter(Boolean).join(" ") || booking.carModel}
+                {booking.vehicleYear != null ? ` · ${booking.vehicleYear}` : ""}
+              </span>
+              <span className="block text-gray-600 dark:text-zinc-400">{booking.vehicleType}</span>
+              {booking.chassisNumber || booking.registrationNumber ? (
+                <span className="mt-1 block font-mono text-sm tracking-wide">
+                  Chassis (RC): {booking.chassisNumber || booking.registrationNumber}
+                </span>
+              ) : null}
+            </dd>
           </div>
           <div className="flex justify-between gap-4">
             <dt className="text-gray-500 dark:text-zinc-500">Slot</dt>
@@ -67,7 +78,11 @@ export default async function BookingConfirmation({
             bookingId={booking._id}
             serviceName={booking.serviceId?.name ?? "Service"}
             vehicleType={booking.vehicleType}
+            carMake={booking.carMake}
             carModel={booking.carModel}
+            vehicleYear={booking.vehicleYear}
+            chassisNumber={booking.chassisNumber}
+            registrationNumber={booking.registrationNumber}
             date={booking.date}
             time={booking.time}
             durationMinutes={booking.serviceId?.duration ?? 60}
