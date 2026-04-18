@@ -2,7 +2,8 @@
 /* eslint-disable @next/next/no-img-element */
 /* eslint-disable react-hooks/set-state-in-effect */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { adminApi } from "@/lib/api";
 import { Booking } from "@/lib/types";
 
@@ -48,7 +49,8 @@ function BookingCustomerSummary({ booking }: { booking: Booking }) {
   );
 }
 
-export default function AdminBookingsPage() {
+function AdminBookingsPageContent() {
+  const searchParams = useSearchParams();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [selected, setSelected] = useState<Booking | null>(null);
   const [inspection, setInspection] = useState<Inspection | null>(null);
@@ -56,7 +58,8 @@ export default function AdminBookingsPage() {
   const [partsUsed, setPartsUsed] = useState("");
   const [extraCharges, setExtraCharges] = useState(0);
   const [notes, setNotes] = useState("");
-  const [date, setDate] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [jobCardSaving, setJobCardSaving] = useState(false);
   const [jobCardMsg, setJobCardMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
@@ -69,10 +72,41 @@ export default function AdminBookingsPage() {
   const beforeInputRef = useRef<HTMLInputElement>(null);
   const afterInputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    const single = searchParams.get("date");
+    const df = searchParams.get("dateFrom");
+    const dt = searchParams.get("dateTo");
+    const st = searchParams.get("status");
+    if (df && /^\d{4}-\d{2}-\d{2}$/.test(df)) {
+      setDateFrom(df);
+      if (dt && /^\d{4}-\d{2}-\d{2}$/.test(dt)) setDateTo(dt);
+      else setDateTo(df);
+    } else if (single && /^\d{4}-\d{2}-\d{2}$/.test(single)) {
+      setDateFrom(single);
+      setDateTo(single);
+    } else if (!df && !single) {
+      setDateFrom("");
+      setDateTo("");
+    }
+    if (st && ["Pending", "In Progress", "Completed"].includes(st)) {
+      setStatusFilter(st);
+    } else if (!st) {
+      setStatusFilter("");
+    }
+  }, [searchParams]);
+
   const load = useCallback(async () => {
-    const res = await adminApi.get("/bookings", { params: { date: date || undefined, status: statusFilter || undefined } });
+    const params: { date?: string; dateFrom?: string; dateTo?: string; status?: string } = {};
+    if (statusFilter) params.status = statusFilter;
+    if (dateFrom && dateTo) {
+      params.dateFrom = dateFrom;
+      params.dateTo = dateTo;
+    } else if (dateFrom) {
+      params.dateFrom = dateFrom;
+    }
+    const res = await adminApi.get("/bookings", { params });
     setBookings(res.data);
-  }, [date, statusFilter]);
+  }, [dateFrom, dateTo, statusFilter]);
 
   useEffect(() => {
     void load();
@@ -260,11 +294,45 @@ export default function AdminBookingsPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-3xl font-bold">Booking Management</h1>
-      <div className="card flex flex-wrap gap-3 p-4">
-        <input type="date" className="rounded-lg border p-2" value={date} onChange={(e) => setDate(e.target.value)} />
-        <select className="rounded-lg border p-2" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-          <option value="">All status</option><option>Pending</option><option>In Progress</option><option>Completed</option>
+      <div className="card flex flex-col gap-3 p-4 md:flex-row md:flex-wrap md:items-end">
+        <div>
+          <label className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">From (service date)</label>
+          <input
+            type="date"
+            className="rounded-lg border border-zinc-300 bg-white p-2 dark:border-zinc-600 dark:bg-zinc-800"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">To (optional range)</label>
+          <input
+            type="date"
+            className="rounded-lg border border-zinc-300 bg-white p-2 dark:border-zinc-600 dark:bg-zinc-800"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+          />
+        </div>
+        <select
+          className="rounded-lg border border-zinc-300 bg-white p-2 dark:border-zinc-600 dark:bg-zinc-800"
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+        >
+          <option value="">All status</option>
+          <option>Pending</option>
+          <option>In Progress</option>
+          <option>Completed</option>
         </select>
+        <button
+          type="button"
+          className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-600"
+          onClick={() => {
+            setDateFrom("");
+            setDateTo("");
+          }}
+        >
+          Clear dates
+        </button>
       </div>
       {statusMsg && (
         <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100">
@@ -522,5 +590,13 @@ export default function AdminBookingsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function AdminBookingsPage() {
+  return (
+    <Suspense fallback={<div className="space-y-4 p-4 text-sm text-zinc-500">Loading bookings…</div>}>
+      <AdminBookingsPageContent />
+    </Suspense>
   );
 }

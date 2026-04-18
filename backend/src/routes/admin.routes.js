@@ -17,14 +17,102 @@ const upload = multer({ storage });
 
 router.use(protectAdmin);
 
-router.get("/dashboard", async (_req, res) => {
-  const [totalBookings, todaysBookings, activeServices] = await Promise.all([
+/** YYYY-MM-DD in the server’s local timezone (matches how booking `date` is stored). */
+function ymdLocal(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function parseYmdToLocalDate(s) {
+  if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(String(s))) return null;
+  const [y, m, d] = String(s).split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  if (Number.isNaN(dt.getTime())) return null;
+  return dt;
+}
+
+/** Monday–Sunday week (local) containing refYmd. */
+function weekRangeContainingYmd(refYmd) {
+  const ref = parseYmdToLocalDate(refYmd) || new Date();
+  const d = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
+  const dow = d.getDay();
+  const mondayOffset = dow === 0 ? -6 : 1 - dow;
+  const start = new Date(d);
+  start.setDate(d.getDate() + mondayOffset);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  return { rangeStart: ymdLocal(start), rangeEnd: ymdLocal(end) };
+}
+
+/** Full calendar month (local) containing refYmd. */
+function monthRangeContainingYmd(refYmd) {
+  const ref = parseYmdToLocalDate(refYmd) || new Date();
+  const y = ref.getFullYear();
+  const mo = ref.getMonth();
+  const start = ymdLocal(new Date(y, mo, 1));
+  const last = new Date(y, mo + 1, 0).getDate();
+  const end = ymdLocal(new Date(y, mo, last));
+  return { rangeStart: start, rangeEnd: end };
+}
+
+function dayRangeYmd(refYmd) {
+  const ref = parseYmdToLocalDate(refYmd) || new Date();
+  const s = ymdLocal(ref);
+  return { rangeStart: s, rangeEnd: s };
+}
+
+async function countByStatusInDateRange(rangeStart, rangeEnd) {
+  const q = { date: { $gte: rangeStart, $lte: rangeEnd } };
+  const [completed, pending, inProgress, totalInRange] = await Promise.all([
+    Booking.countDocuments({ ...q, status: "Completed" }),
+    Booking.countDocuments({ ...q, status: "Pending" }),
+    Booking.countDocuments({ ...q, status: "In Progress" }),
+    Booking.countDocuments(q),
+  ]);
+  return { completed, pending, inProgress, totalInRange };
+}
+
+router.get("/dashboard", async (req, res) => {
+  const today = ymdLocal();
+  const period = ["day", "week", "month"].includes(String(req.query.period)) ? String(req.query.period) : "day";
+  const ref =
+    req.query.ref && /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.ref)) ? String(req.query.ref) : today;
+
+  let range;
+  if (period === "week") range = weekRangeContainingYmd(ref);
+  else if (period === "month") range = monthRangeContainingYmd(ref);
+  else range = dayRangeYmd(ref);
+
+  const [
+    totalBookings,
+    todaysBookings,
+    activeServices,
+    completedAllTime,
+    periodCounts,
+  ] = await Promise.all([
     Booking.countDocuments(),
-    Booking.countDocuments({ date: new Date().toISOString().slice(0, 10) }),
+    Booking.countDocuments({ date: today }),
     Service.countDocuments(),
+    Booking.countDocuments({ status: "Completed" }),
+    countByStatusInDateRange(range.rangeStart, range.rangeEnd),
   ]);
 
-  res.json({ totalBookings, todaysBookings, activeServices });
+  res.json({
+    totalBookings,
+    todaysBookings,
+    activeServices,
+    completedAllTime,
+    today,
+    period: {
+      type: period,
+      ref,
+      rangeStart: range.rangeStart,
+      rangeEnd: range.rangeEnd,
+      ...periodCounts,
+    },
+  });
 });
 
 router.post("/service", async (req, res) => {
@@ -55,10 +143,16 @@ router.put("/slots/:id", async (req, res) => {
 });
 
 router.get("/bookings", async (req, res) => {
-  const { date, status } = req.query;
+  const { date, dateFrom, dateTo, status } = req.query;
   const query = {};
-  if (date) query.date = date;
-  if (status) query.status = status;
+  if (dateFrom && dateTo) {
+    query.date = { $gte: String(dateFrom), $lte: String(dateTo) };
+  } else if (dateFrom) {
+    query.date = String(dateFrom);
+  } else if (date) {
+    query.date = String(date);
+  }
+  if (status) query.status = String(status);
   const bookings = await Booking.find(query)
     .populate("serviceId")
     .sort({ createdAt: -1 });
