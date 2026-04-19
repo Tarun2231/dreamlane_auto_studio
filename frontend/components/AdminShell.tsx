@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import AdminCommandPalette, { AdminSearchButton } from "@/components/AdminCommandPalette";
 import AdminGateLoading from "@/components/AdminGateLoading";
+import AdminLoginHistorySidebar from "@/components/admin/AdminLoginHistorySidebar";
 import AdminThemeToggle from "@/components/AdminThemeToggle";
 import { ADMIN_APP_VERSION } from "@/lib/adminMeta";
 
@@ -264,6 +265,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
 
           <div className="flex flex-1 flex-col overflow-y-auto px-5 pb-4 pt-2 md:pt-4">
             <SidebarNav pathname={pathname} onNavigate={() => setMobileNavOpen(false)} />
+            <AdminLoginHistorySidebar />
             <div className="mt-auto space-y-2 border-t border-zinc-200 pt-6 dark:border-zinc-800">
               <Link
                 href="/"

@@ -4,6 +4,7 @@ const multer = require("multer");
 const nodemailer = require("nodemailer");
 const { storage } = require("../config/cloudinary");
 const { protectAdmin } = require("../middleware/auth");
+const AdminLoginEvent = require("../models/AdminLoginEvent");
 const Service = require("../models/Service");
 const Slot = require("../models/Slot");
 const Booking = require("../models/Booking");
@@ -18,6 +19,36 @@ const router = express.Router();
 const upload = multer({ storage });
 
 router.use(protectAdmin);
+
+/** Recent successful admin sign-ins (IP + geo label from login time). */
+router.get("/login-history", async (req, res) => {
+  try {
+    const raw = Number(req.query.limit);
+    const limit = Math.min(100, Math.max(1, Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 25));
+    const rows = await AdminLoginEvent.find()
+      .sort({ at: -1 })
+      .limit(limit)
+      .select("at email name ip locationLabel userAgent isoUtc timezoneLine")
+      .lean();
+
+    res.json({
+      items: rows.map((row) => ({
+        id: String(row._id),
+        at: row.at,
+        email: row.email,
+        name: row.name || "",
+        ip: row.ip || "",
+        locationLabel: row.locationLabel || "",
+        userAgent: row.userAgent || "",
+        isoUtc: row.isoUtc || "",
+        timezoneLine: row.timezoneLine || "",
+      })),
+    });
+  } catch (err) {
+    console.error("GET /admin/login-history", err);
+    return res.status(500).json({ message: "Could not load login history" });
+  }
+});
 
 /** YYYY-MM-DD in the server’s local timezone (matches how booking `date` is stored). */
 function ymdLocal(d = new Date()) {

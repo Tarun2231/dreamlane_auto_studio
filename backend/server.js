@@ -9,6 +9,13 @@ connectDB();
 
 const app = express();
 
+/** When behind nginx/Caddy/etc., set TRUST_PROXY_HOPS=1 so client IPs from X-Forwarded-For are trusted. */
+const trustHops = process.env.TRUST_PROXY_HOPS;
+if (trustHops !== undefined && String(trustHops).trim() !== "") {
+  const n = Number(trustHops);
+  app.set("trust proxy", Number.isFinite(n) && n >= 0 ? n : 1);
+}
+
 app.use(
   cors({
     origin: true,

@@ -99,6 +99,19 @@ export type FleetSnapshot = {
   recent: FleetRecentRow[];
 };
 
+/** GET /admin/login-history */
+export type AdminLoginHistoryItem = {
+  id: string;
+  at: string;
+  email: string;
+  name: string;
+  ip: string;
+  locationLabel: string;
+  userAgent: string;
+  isoUtc: string;
+  timezoneLine: string;
+};
+
 /** GET /admin/quote-stats */
 export type AdminQuoteStats = {
   submitted: number;

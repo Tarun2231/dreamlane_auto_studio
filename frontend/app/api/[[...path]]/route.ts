@@ -27,6 +27,16 @@ async function proxy(req: NextRequest, params: Promise<{ path?: string[] }>) {
     headers.set(key, value);
   });
 
+  /** Prefer a single client IP for the Express API (admin login alerts, etc.). */
+  const clientHint =
+    req.headers.get("cf-connecting-ip")?.trim() ||
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    req.headers.get("x-real-ip")?.trim() ||
+    "";
+  if (clientHint) {
+    headers.set("x-forwarded-for", clientHint);
+  }
+
   const init: RequestInit = {
     method: req.method,
     headers,

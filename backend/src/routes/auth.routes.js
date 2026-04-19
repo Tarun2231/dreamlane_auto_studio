@@ -1,6 +1,7 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const { processAdminLoginFollowUp } = require("../utils/adminLoginFollowUp");
 
 const router = express.Router();
 
@@ -31,6 +32,10 @@ router.post("/admin/login", async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: "8h" }
     );
+
+    void processAdminLoginFollowUp(req, admin).catch((err) => {
+      console.error("[admin-login-follow-up]", err?.message || err);
+    });
 
     return res.json({
       token,

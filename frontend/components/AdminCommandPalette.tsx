@@ -32,6 +32,12 @@ function buildCommands(todayYmd: string): Cmd[] {
     { id: "customers", label: "Customers", href: "/admin/customers", keywords: "directory crm email whatsapp" },
     { id: "cars", label: "Cars", href: "/admin/cars", keywords: "fleet vehicles workshop models" },
     {
+      id: "login-history",
+      label: "Sign-in history",
+      href: "/admin/login-history",
+      keywords: "security audit log ip location admin login",
+    },
+    {
       id: "quotes",
       label: "Quote requests",
       href: "/admin/quotes",
