@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import QuoteThreadPanel from "@/components/QuoteThreadPanel";
 import { api } from "@/lib/api";
 import { QuoteRequest, Service } from "@/lib/types";
 
@@ -16,13 +18,32 @@ function formatInr(n: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
 }
 
+function quoteStatusCustomerLabel(status: string) {
+  switch (status) {
+    case "Pending":
+      return "In conversation";
+    case "Submitted":
+      return "Received";
+    case "Quoted":
+      return "Quoted — awaiting your decision";
+    default:
+      return status;
+  }
+}
+
+function requestKindLabel(q: QuoteRequest) {
+  return q.requestKind === "enquiry" ? "Enquiry" : "Quotation";
+}
+
 export default function QuoteTrackPage() {
+  const searchParams = useSearchParams();
   const [id, setId] = useState("");
   const [email, setEmail] = useState("");
   const [quote, setQuote] = useState<QuoteRequest | null>(null);
   const [loading, setLoading] = useState(false);
   const [respondLoading, setRespondLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [bootstrapped, setBootstrapped] = useState(false);
 
   const lookup = async () => {
     setErr(null);
@@ -37,6 +58,40 @@ export default function QuoteTrackPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (bootstrapped) return;
+    const qpId = String(searchParams.get("id") || "").trim();
+    const qpEmail = String(searchParams.get("email") || "").trim();
+    if (qpId) setId(qpId);
+    if (qpEmail) setEmail(qpEmail);
+    if (qpId && qpEmail) {
+      void (async () => {
+        setLoading(true);
+        setErr(null);
+        try {
+          const res = await api.post<QuoteRequest>("/quote-request/lookup", { id: qpId, email: qpEmail });
+          setQuote(res.data);
+        } catch {
+          setErr("Could not auto-open this enquiry. Please verify ID and email.");
+        } finally {
+          setLoading(false);
+        }
+      })();
+    }
+    setBootstrapped(true);
+  }, [bootstrapped, searchParams]);
+
+  const mergeThread = useCallback((q: QuoteRequest) => {
+    setQuote((prev) => {
+      if (!prev || prev._id !== q._id) return q;
+      return {
+        ...prev,
+        messages: q.messages,
+        lastThreadActivityAt: q.lastThreadActivityAt,
+      };
+    });
+  }, []);
 
   const respond = async (action: "accept" | "decline") => {
     if (!quote) return;
@@ -66,60 +121,67 @@ export default function QuoteTrackPage() {
         </Link>
         <span className="mx-2">/</span>
         <Link href="/quote" className="font-medium text-amber-800 hover:underline dark:text-amber-400">
-          Quotation
+          Request
         </Link>
         <span className="mx-2">/</span>
         <span className="text-gray-900 dark:text-zinc-200">Track</span>
       </nav>
-      <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Track your quote</h1>
+      <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Track your enquiry</h1>
       <p className="mt-2 text-sm text-gray-600 dark:text-zinc-400">
-        Enter the request ID from your confirmation and the email you used.
+        Enter your request ID and email to view status, conversation updates, and quotation details.
       </p>
 
       <form
-        className="card mt-8 space-y-4 p-4 sm:p-6"
+        className="card mt-8 space-y-4 border border-zinc-200/80 bg-white/95 p-4 shadow-sm ring-1 ring-black/[0.03] sm:p-6 dark:border-zinc-700 dark:bg-zinc-900/80 dark:ring-white/5"
         onSubmit={(e) => {
           e.preventDefault();
           void lookup();
         }}
       >
-        <label className="block space-y-1.5">
-          <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-zinc-500">Request ID</span>
-          <input
-            className="w-full rounded-xl border border-gray-300 bg-white p-3 font-mono text-sm dark:border-zinc-600 dark:bg-zinc-800"
-            value={id}
-            onChange={(e) => setId(e.target.value)}
-            placeholder="Paste your reference ID"
-            autoComplete="off"
-          />
-        </label>
-        <label className="block space-y-1.5">
-          <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-zinc-500">Email</span>
-          <input
-            className="w-full rounded-xl border border-gray-300 bg-white p-3 dark:border-zinc-600 dark:bg-zinc-800"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            autoComplete="email"
-          />
-        </label>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="block space-y-1.5 sm:col-span-2">
+            <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-zinc-500">Request ID</span>
+            <input
+              className="w-full rounded-xl border border-gray-300 bg-white p-3 font-mono text-sm dark:border-zinc-600 dark:bg-zinc-800"
+              value={id}
+              onChange={(e) => setId(e.target.value)}
+              placeholder="Paste your request ID"
+              autoComplete="off"
+            />
+          </label>
+          <label className="block space-y-1.5 sm:col-span-2">
+            <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-zinc-500">Email</span>
+            <input
+              className="w-full rounded-xl border border-gray-300 bg-white p-3 dark:border-zinc-600 dark:bg-zinc-800"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+            />
+          </label>
+        </div>
         {err && !quote && (
           <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100">
             {err}
           </p>
         )}
         <button type="submit" className="btn-primary min-h-11 w-full sm:w-auto" disabled={loading}>
-          {loading ? "Looking up…" : "View quote"}
+          {loading ? "Looking up…" : "View request"}
         </button>
       </form>
 
       {quote && (
-        <div className="card mt-6 space-y-4 p-4 sm:p-6">
-          <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Your request</p>
+        <div className="card mt-6 space-y-4 border border-zinc-200/80 bg-white/95 p-4 shadow-sm ring-1 ring-black/[0.03] sm:p-6 dark:border-zinc-700 dark:bg-zinc-900/80 dark:ring-white/5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Your request</p>
+            <span className="rounded-full border border-zinc-300 bg-zinc-100 px-2.5 py-0.5 text-[11px] font-semibold text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+              {requestKindLabel(quote)}
+            </span>
+          </div>
           <dl className="space-y-2 text-sm">
             <div className="flex justify-between gap-4">
               <dt className="text-gray-500 dark:text-zinc-500">Status</dt>
-              <dd className="font-medium">{quote.status}</dd>
+              <dd className="max-w-[65%] text-right font-medium">{quoteStatusCustomerLabel(quote.status)}</dd>
             </div>
             <div className="flex justify-between gap-4">
               <dt className="text-gray-500 dark:text-zinc-500">Name</dt>
@@ -145,6 +207,20 @@ export default function QuoteTrackPage() {
                 </dd>
               </div>
             )}
+            {quote.requestKind === "enquiry" && (quote.enquiryTopic || quote.urgency || quote.preferredContact) ? (
+              <div className="rounded-xl border border-violet-200/70 bg-violet-50/50 p-3 dark:border-violet-900/50 dark:bg-violet-950/25">
+                <dt className="text-gray-500 dark:text-zinc-500">Enquiry details</dt>
+                <dd className="mt-1 space-y-1">
+                  {quote.enquiryTopic ? <p><span className="text-zinc-500 dark:text-zinc-400">Topic:</span> {quote.enquiryTopic}</p> : null}
+                  {quote.urgency ? <p><span className="text-zinc-500 dark:text-zinc-400">Urgency:</span> <span className="capitalize">{quote.urgency}</span></p> : null}
+                  {quote.preferredContact ? (
+                    <p>
+                      <span className="text-zinc-500 dark:text-zinc-400">Preferred reply:</span> <span className="capitalize">{quote.preferredContact}</span>
+                    </p>
+                  ) : null}
+                </dd>
+              </div>
+            ) : null}
             <div className="border-t border-black/5 pt-3 dark:border-white/10">
               <dt className="text-gray-500 dark:text-zinc-500">Service</dt>
               <dd className="mt-1 text-gray-900 dark:text-zinc-100">
@@ -223,6 +299,15 @@ export default function QuoteTrackPage() {
               {err}
             </p>
           )}
+
+          <div className="border-t border-black/5 pt-6 dark:border-white/10">
+            <QuoteThreadPanel
+              quoteId={quote._id}
+              mode="customer"
+              customerEmail={email.trim()}
+              onThreadUpdate={mergeThread}
+            />
+          </div>
         </div>
       )}
 

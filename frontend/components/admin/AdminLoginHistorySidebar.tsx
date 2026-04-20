@@ -16,7 +16,7 @@ export default function AdminLoginHistorySidebar() {
     (async () => {
       try {
         const res = await adminApi.get<{ items: AdminLoginHistoryItem[] }>("/login-history", {
-          params: { limit: "8" },
+          params: { limit: "2" },
         });
         if (!cancelled) setItems(res.data.items);
       } catch {
@@ -44,10 +44,10 @@ export default function AdminLoginHistorySidebar() {
           </span>
         </span>
         <span className="mt-1 block text-[10px] leading-snug text-zinc-400 group-hover:text-zinc-500 dark:text-zinc-500 dark:group-hover:text-zinc-400">
-          Time and approximate location (newest first). Opens full log.
+          Last 2 sign-ins only — use View all for the full list.
         </span>
       </Link>
-      <div className="mt-3 max-h-[min(42vh,22rem)] space-y-2.5 overflow-y-auto overscroll-contain pr-0.5">
+      <div className="mt-3 space-y-2.5 pr-0.5">
         {items === null ? (
           <p className="text-xs text-zinc-500 dark:text-zinc-400">Loading…</p>
         ) : items.length === 0 ? (

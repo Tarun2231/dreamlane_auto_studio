@@ -1,7 +1,8 @@
 "use client";
 
+import { useSiteLocation } from "@/components/SiteLocationProvider";
 import { buildBookingIcs } from "@/lib/ics";
-import { SITE_LOCATION, SITE_NAME } from "@/lib/site";
+import { SITE_NAME } from "@/lib/site";
 
 type Props = {
   bookingId: string;
@@ -31,6 +32,8 @@ export default function AddToCalendarButton({
   time,
   durationMinutes,
 }: Props) {
+  const { location } = useSiteLocation();
+
   const download = () => {
     const title = `${SITE_NAME} — ${serviceName}`;
     const vehicleLine = [carMake, carModel].filter(Boolean).join(" ").trim() || carModel;
@@ -42,7 +45,7 @@ export default function AddToCalendarButton({
       uid: bookingId,
       title,
       description,
-      location: SITE_LOCATION,
+      location,
       date,
       time,
       durationMinutes,

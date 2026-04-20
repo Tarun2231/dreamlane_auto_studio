@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { AdminSearchButton, requestOpenAdminCommandPalette } from "@/components/AdminCommandPalette";
 import AdminThemeToggle from "@/components/AdminThemeToggle";
 import DashboardPeriodControls, { type DashboardPeriodType } from "@/components/admin/DashboardPeriodControls";
 import WorkshopFinancePanel from "@/components/admin/WorkshopFinancePanel";
 import WorkshopInsightsPanel, { type WorkshopInsights } from "@/components/admin/WorkshopInsightsPanel";
 import { adminApi } from "@/lib/api";
-import type { AdminQuoteStats, FleetSnapshot } from "@/lib/types";
+import type { AdminNotificationItem, AdminQuoteStats, FleetSnapshot, ShopSalesSnapshot } from "@/lib/types";
 
 type DashboardStats = {
   totalBookings: number;
@@ -16,6 +17,7 @@ type DashboardStats = {
   activeServices: number;
   completedAllTime: number;
   today?: string;
+  shopSales?: ShopSalesSnapshot;
   attention?: {
     pendingBookings: number;
     inProgressBookings: number;
@@ -35,6 +37,14 @@ type DashboardStats = {
     totalInRange: number;
   };
 };
+
+type SupportStatus = "online" | "offline" | "break";
+
+function formatInrDash(n: number) {
+  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(
+    Number.isFinite(n) ? n : 0
+  );
+}
 
 function ymdLocal(d = new Date()) {
   const y = d.getFullYear();
@@ -184,7 +194,16 @@ function DashboardMetricLink({
   );
 }
 
+function formatNotifTime(iso: string) {
+  try {
+    return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  } catch {
+    return iso;
+  }
+}
+
 export default function AdminDashboardPage() {
+  const router = useRouter();
   const [periodType, setPeriodType] = useState<DashboardPeriodType>("day");
   const [refDate, setRefDate] = useState(() => ymdLocal());
   const [rangeFrom, setRangeFrom] = useState(() => startOfMonthYmd());
@@ -192,8 +211,16 @@ export default function AdminDashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [fleet, setFleet] = useState<FleetSnapshot | null>(null);
   const [quoteStats, setQuoteStats] = useState<AdminQuoteStats | null>(null);
+  const [supportStatus, setSupportStatus] = useState<SupportStatus>("online");
+  const [statusBusy, setStatusBusy] = useState(false);
+  const [notifications, setNotifications] = useState<AdminNotificationItem[]>([]);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [readNotificationIds, setReadNotificationIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const actionsRef = useRef<HTMLDivElement | null>(null);
+  const notifRef = useRef<HTMLDivElement | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -211,6 +238,13 @@ export default function AdminDashboardPage() {
       }
       const res = await adminApi.get<DashboardStats>("/dashboard", { params });
       setStats(res.data);
+      try {
+        const presence = await adminApi.get<{ supportStatus?: string }>("/site-presence");
+        const s = String(presence.data?.supportStatus || "");
+        setSupportStatus(s === "offline" || s === "break" ? s : "online");
+      } catch {
+        setSupportStatus("online");
+      }
       const p = res.data.period;
       const scoped =
         p.type !== "overall" && p.rangeStart && p.rangeEnd
@@ -242,6 +276,15 @@ export default function AdminDashboardPage() {
     }
   }, [periodType, refDate, rangeFrom, rangeTo]);
 
+  const loadNotifications = useCallback(async () => {
+    try {
+      const res = await adminApi.get<{ items?: AdminNotificationItem[] }>("/notifications", { params: { limit: 50 } });
+      setNotifications(Array.isArray(res.data?.items) ? res.data.items : []);
+    } catch {
+      // keep dashboard functional even if notifications fail
+    }
+  }, []);
+
   const [lastLoadedAt, setLastLoadedAt] = useState<Date | null>(null);
 
   useEffect(() => {
@@ -249,8 +292,145 @@ export default function AdminDashboardPage() {
   }, [load]);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = localStorage.getItem("adminNotificationsReadIds");
+      const parsed = raw ? JSON.parse(raw) : [];
+      setReadNotificationIds(Array.isArray(parsed) ? parsed.filter((x) => typeof x === "string") : []);
+    } catch {
+      setReadNotificationIds([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadNotifications();
+    const t = setInterval(() => {
+      void loadNotifications();
+    }, 20000);
+    return () => clearInterval(t);
+  }, [loadNotifications]);
+
+  useEffect(() => {
     if (!loading && stats) setLastLoadedAt(new Date());
   }, [loading, stats]);
+
+  useEffect(() => {
+    if (!actionsOpen) return;
+    const onPointerDown = (ev: PointerEvent) => {
+      if (!actionsRef.current) return;
+      if (actionsRef.current.contains(ev.target as Node)) return;
+      setActionsOpen(false);
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    return () => window.removeEventListener("pointerdown", onPointerDown);
+  }, [actionsOpen]);
+
+  useEffect(() => {
+    if (!notifOpen) return;
+    const onPointerDown = (ev: PointerEvent) => {
+      if (!notifRef.current) return;
+      if (notifRef.current.contains(ev.target as Node)) return;
+      setNotifOpen(false);
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    return () => window.removeEventListener("pointerdown", onPointerDown);
+  }, [notifOpen]);
+
+  const updateSupportStatus = useCallback(async (next: SupportStatus) => {
+    try {
+      setStatusBusy(true);
+      await adminApi.put("/site-presence", { supportStatus: next });
+      setSupportStatus(next);
+    } catch (e: unknown) {
+      const ax = e as { response?: { data?: { message?: string } } };
+      setError(ax?.response?.data?.message ?? "Could not update support status.");
+    } finally {
+      setStatusBusy(false);
+    }
+  }, []);
+
+  const logout = useCallback(() => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("adminToken");
+      window.location.href = "/admin/login";
+    } else {
+      router.replace("/admin/login");
+    }
+  }, [router]);
+
+  const unreadCount = notifications.reduce((acc, n) => (readNotificationIds.includes(n.id) ? acc : acc + 1), 0);
+
+  const markNotificationRead = useCallback((id: string) => {
+    setReadNotificationIds((prev) => {
+      if (prev.includes(id)) return prev;
+      const next = [id, ...prev].slice(0, 500);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("adminNotificationsReadIds", JSON.stringify(next));
+      }
+      return next;
+    });
+  }, []);
+
+  const markNotificationsRead = useCallback(() => {
+    const allIds = Array.from(new Set(notifications.map((n) => n.id)));
+    setReadNotificationIds((prev) => {
+      const next = Array.from(new Set([...allIds, ...prev])).slice(0, 500);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("adminNotificationsReadIds", JSON.stringify(next));
+      }
+      return next;
+    });
+  }, [notifications]);
+
+  useEffect(() => {
+    if (notifications.length === 0) return;
+    setReadNotificationIds((prev) => {
+      const keep = new Set(notifications.map((n) => n.id));
+      const next = prev.filter((id) => keep.has(id));
+      if (next.length !== prev.length && typeof window !== "undefined") {
+        localStorage.setItem("adminNotificationsReadIds", JSON.stringify(next));
+      }
+      return next;
+    });
+  }, [notifications]);
+
+  const hasUnread = unreadCount > 0;
+
+  const unreadPulseClass = hasUnread ? "ring-2 ring-rose-200 dark:ring-rose-900/50" : "";
+
+  const unreadBorderClass = hasUnread
+    ? "border-rose-300 dark:border-rose-700"
+    : "border-zinc-200 dark:border-zinc-600";
+
+  const unreadBellClass = hasUnread
+    ? "text-rose-700 dark:text-rose-300"
+    : "";
+
+  const markAndCloseNotifications = useCallback(
+    (id: string) => {
+      markNotificationRead(id);
+      setNotifOpen(false);
+    },
+    [markNotificationRead]
+  );
+
+  const supportStatusUi = {
+    online: {
+      label: "Online",
+      hint: "Customers see support online",
+      pill: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300",
+    },
+    break: {
+      label: "Break",
+      hint: "Show On break to customers",
+      pill: "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300",
+    },
+    offline: {
+      label: "Offline",
+      hint: "Hide live support availability",
+      pill: "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+    },
+  } as const;
 
   const todayParam = stats?.today ?? ymdLocal();
   const todayYmd = ymdLocal();
@@ -389,46 +569,178 @@ export default function AdminDashboardPage() {
           <div className="flex shrink-0 items-center gap-2 self-end sm:self-center">
             <AdminSearchButton onClick={requestOpenAdminCommandPalette} />
             <AdminThemeToggle variant="icon" />
-            <button
-              type="button"
-              className="group inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-800 shadow-sm transition hover:bg-zinc-50 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
-              onClick={() => void load()}
-              disabled={loading}
-              aria-busy={loading}
-              aria-label={loading ? "Loading dashboard" : "Refresh dashboard"}
-            >
-              {loading ? (
-                <svg
-                  className="h-5 w-5 animate-spin text-zinc-700 dark:text-zinc-200"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  aria-hidden
-                >
-                  <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-                  <path
-                    className="opacity-90"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
+            <div className="relative" ref={notifRef}>
+              <button
+                type="button"
+                className={`relative inline-flex min-h-11 items-center justify-center rounded-2xl border bg-white px-3 text-sm font-medium text-zinc-800 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 hover:shadow active:scale-[0.98] dark:bg-zinc-800 dark:text-zinc-100 dark:hover:border-zinc-500 dark:hover:bg-zinc-700 ${unreadBorderClass} ${unreadBellClass} ${unreadPulseClass}`}
+                aria-haspopup="menu"
+                aria-expanded={notifOpen}
+                onClick={() => setNotifOpen((v) => !v)}
+              >
+                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden>
+                  <path d="M14.857 17H9.143A3.143 3.143 0 0 1 6 13.857V10a6 6 0 1 1 12 0v3.857A3.143 3.143 0 0 1 14.857 17Z" />
+                  <path d="M9.5 18.5a2.5 2.5 0 0 0 5 0" />
                 </svg>
-              ) : (
-                <svg
-                  className="h-5 w-5 text-zinc-800 transition-transform duration-500 ease-out group-hover:rotate-180 dark:text-zinc-100"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={1.75}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+                {unreadCount > 0 ? (
+                  <span className="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1 text-[11px] font-bold text-white">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                ) : null}
+              </button>
+              {notifOpen ? (
+                <div className="absolute right-0 z-20 mt-2 w-[22rem] max-w-[92vw] overflow-hidden rounded-2xl border border-zinc-200 bg-white/95 p-2 shadow-xl backdrop-blur dark:border-zinc-700 dark:bg-zinc-900/95">
+                  <div className="mb-1 flex items-center justify-between px-1">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Notifications</p>
+                    <button
+                      type="button"
+                      className="text-[11px] font-medium text-blue-700 hover:underline dark:text-blue-400"
+                      onClick={() => {
+                        markNotificationsRead();
+                        void loadNotifications();
+                      }}
+                    >
+                      Mark all read
+                    </button>
+                  </div>
+                  <div className="max-h-80 space-y-1 overflow-y-auto pr-0.5">
+                    {notifications.length === 0 ? (
+                      <p className="rounded-xl border border-dashed border-zinc-300 px-3 py-6 text-center text-xs text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
+                        No notifications yet.
+                      </p>
+                    ) : (
+                      notifications.map((n) => {
+                        const isUnread = !readNotificationIds.includes(n.id);
+                        return (
+                          <Link
+                            key={n.id}
+                            href={n.href}
+                            className={`block rounded-xl border px-3 py-2.5 transition hover:bg-zinc-50 dark:hover:bg-zinc-800 ${
+                              isUnread
+                                ? "border-blue-200 bg-blue-50/60 dark:border-blue-900/50 dark:bg-blue-950/20"
+                                : "border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900"
+                            }`}
+                            onClick={() => markAndCloseNotifications(n.id)}
+                          >
+                            <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">{n.title}</p>
+                            <p className="mt-0.5 line-clamp-2 text-xs text-zinc-600 dark:text-zinc-300">{n.message}</p>
+                            <p className="mt-1 text-[10px] text-zinc-500 dark:text-zinc-400">{formatNotifTime(n.at)}</p>
+                          </Link>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+            <div className="relative" ref={actionsRef}>
+              <button
+                type="button"
+                className={`inline-flex min-h-11 items-center gap-2 rounded-2xl border bg-white px-3.5 text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-50 hover:shadow active:scale-[0.98] dark:bg-zinc-800 dark:text-zinc-100 ${
+                  supportStatus === "online"
+                    ? "border-emerald-300 ring-2 ring-emerald-200/60 dark:border-emerald-700 dark:ring-emerald-900/40"
+                    : supportStatus === "break"
+                      ? "border-amber-300 ring-2 ring-amber-200/60 dark:border-amber-700 dark:ring-amber-900/40"
+                      : "border-zinc-300 ring-2 ring-zinc-200/60 dark:border-zinc-600 dark:ring-zinc-800/60"
+                }`}
+                aria-haspopup="menu"
+                aria-expanded={actionsOpen}
+                onClick={() => setActionsOpen((v) => !v)}
+              >
+                <span
+                  className={`inline-block h-2.5 w-2.5 rounded-full ${
+                    supportStatus === "online"
+                      ? "bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.2)]"
+                      : supportStatus === "break"
+                        ? "bg-amber-500 shadow-[0_0_0_3px_rgba(245,158,11,0.2)]"
+                        : "bg-zinc-500 shadow-[0_0_0_3px_rgba(113,113,122,0.2)]"
+                  }`}
                   aria-hidden
-                >
-                  <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 3" />
-                  <path d="M21 3v5h-5" />
-                  <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 21" />
-                  <path d="M3 21v-5h5" />
+                />
+                Actions
+                <svg className={`h-4 w-4 transition ${actionsOpen ? "rotate-180" : ""}`} viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+                  <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z" clipRule="evenodd" />
                 </svg>
-              )}
-            </button>
+              </button>
+              {actionsOpen ? (
+                <div className="absolute right-0 z-20 mt-2 w-64 overflow-hidden rounded-2xl border border-zinc-200 bg-white/95 p-2 shadow-xl backdrop-blur dark:border-zinc-700 dark:bg-zinc-900/95">
+                  <button
+                    type="button"
+                    className="group flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm transition hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                    onClick={() => {
+                      setActionsOpen(false);
+                      void load();
+                    }}
+                    disabled={loading}
+                  >
+                    <span className="font-medium">Refresh</span>
+                    <span className="text-xs text-zinc-500 transition group-hover:rotate-180 dark:text-zinc-400">
+                      {loading ? "Loading..." : "↻"}
+                    </span>
+                  </button>
+
+                  <div className="mt-2 rounded-lg border border-zinc-200 p-2 dark:border-zinc-700">
+                    <div className="mb-1 flex items-center justify-between px-0.5">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Support status</p>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1">
+                      {(["online", "break", "offline"] as const).map((s) => {
+                        const active = supportStatus === s;
+                        return (
+                          <button
+                            key={s}
+                            type="button"
+                            className={`rounded-md px-2 py-1.5 text-xs font-semibold transition ${
+                              active
+                                ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
+                                : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                            }`}
+                            onClick={() => void updateSupportStatus(s)}
+                            disabled={statusBusy}
+                          >
+                            {supportStatusUi[s].label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="mt-1.5 px-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">{supportStatusUi[supportStatus].hint}</p>
+                  </div>
+
+                  <div className="mt-2 space-y-1">
+                    <Link
+                      href="/admin/enquiries"
+                      className="block rounded-lg bg-zinc-100 px-2.5 py-2 text-xs font-medium text-zinc-700 transition hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                      onClick={() => setActionsOpen(false)}
+                    >
+                      Open enquiries
+                    </Link>
+                    <Link
+                      href="/admin/quotes"
+                      className="block rounded-lg bg-zinc-100 px-2.5 py-2 text-xs font-medium text-zinc-700 transition hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                      onClick={() => setActionsOpen(false)}
+                    >
+                      Open quotes
+                    </Link>
+                    <Link
+                      href="/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block rounded-lg bg-blue-50 px-2.5 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 dark:bg-blue-950/35 dark:text-blue-300 dark:hover:bg-blue-950/55"
+                      onClick={() => setActionsOpen(false)}
+                    >
+                      View live website ↗
+                    </Link>
+                  </div>
+                  <button
+                    type="button"
+                    className="mt-2 flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm text-red-700 transition hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
+                    onClick={logout}
+                  >
+                    <span className="font-medium">Log out</span>
+                    <span aria-hidden>↪</span>
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
       </header>
@@ -446,6 +758,60 @@ export default function AdminDashboardPage() {
         loading={loading}
         periodHint={financePeriodHint}
       />
+
+      <section className="card p-5 sm:p-6" aria-labelledby="shop-sales-heading">
+        <h2 id="shop-sales-heading" className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+          Product shop sales
+        </h2>
+        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{financePeriodHint}</p>
+        <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-500">
+          Separate from <strong className="font-medium text-zinc-700 dark:text-zinc-300">service job</strong> income. Uses product
+          order dates in this period; cancelled orders are excluded. Split below is by <strong className="font-medium">line item</strong>{" "}
+          (machines vs accessories vs other).
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="rounded-xl border border-cyan-200/80 bg-cyan-50/70 px-4 py-3 dark:border-cyan-900/50 dark:bg-cyan-950/30">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-cyan-900 dark:text-cyan-400">Shop revenue (total)</p>
+            <p className="mt-1 text-xl font-bold tabular-nums text-cyan-950 dark:text-cyan-50">
+              {loading ? "—" : formatInrDash(stats?.shopSales?.revenueInr ?? 0)}
+            </p>
+          </div>
+          <div className="rounded-xl border border-cyan-200/80 bg-cyan-50/70 px-4 py-3 dark:border-cyan-900/50 dark:bg-cyan-950/30">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-cyan-900 dark:text-cyan-400">Orders</p>
+            <p className="mt-1 text-xl font-bold tabular-nums text-cyan-950 dark:text-cyan-50">
+              {loading ? "—" : stats?.shopSales?.ordersCount ?? 0}
+            </p>
+          </div>
+          <div className="flex flex-col justify-center gap-2 rounded-xl border border-cyan-200/80 bg-cyan-50/40 px-4 py-3 text-sm dark:border-cyan-900/40 dark:bg-cyan-950/20">
+            <Link href="/admin/shop/orders" className="font-medium text-blue-700 hover:underline dark:text-blue-400">
+              View shop orders →
+            </Link>
+            <Link href="/admin/shop" className="font-medium text-blue-700 hover:underline dark:text-blue-400">
+              Manage products →
+            </Link>
+          </div>
+        </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border border-indigo-200/80 bg-indigo-50/60 px-4 py-3 dark:border-indigo-900/45 dark:bg-indigo-950/25">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-indigo-900 dark:text-indigo-400">Machines</p>
+            <p className="mt-1 text-lg font-bold tabular-nums text-indigo-950 dark:text-indigo-50">
+              {loading ? "—" : formatInrDash(stats?.shopSales?.machinesRevenueInr ?? 0)}
+            </p>
+          </div>
+          <div className="rounded-xl border border-violet-200/80 bg-violet-50/60 px-4 py-3 dark:border-violet-900/45 dark:bg-violet-950/25">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-900 dark:text-violet-400">Accessories</p>
+            <p className="mt-1 text-lg font-bold tabular-nums text-violet-950 dark:text-violet-50">
+              {loading ? "—" : formatInrDash(stats?.shopSales?.accessoriesRevenueInr ?? 0)}
+            </p>
+          </div>
+          <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/40">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-400">Other</p>
+            <p className="mt-1 text-lg font-bold tabular-nums text-slate-900 dark:text-slate-100">
+              {loading ? "—" : formatInrDash(stats?.shopSales?.otherRevenueInr ?? 0)}
+            </p>
+          </div>
+        </div>
+      </section>
 
       <section className="space-y-3" aria-labelledby="attention-heading">
         <h2 id="attention-heading" className="text-base font-semibold text-zinc-800 dark:text-zinc-200">
@@ -487,13 +853,20 @@ export default function AdminDashboardPage() {
           Counts quotes <strong className="font-medium text-zinc-700 dark:text-zinc-300">created</strong> in the reporting period
           (except All time = ever). Follow up on new enquiries and replies waiting on the customer.
         </p>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           <DashboardMetricLink
             href="/admin/quotes?status=Submitted"
             label="Awaiting your price"
             value={loading || quoteStats == null ? "—" : quoteStats.submitted}
             footer="Open submitted →"
             preset="attentionPending"
+          />
+          <DashboardMetricLink
+            href="/admin/quotes?status=Pending"
+            label="In conversation"
+            value={loading || quoteStats == null ? "—" : quoteStats.pending}
+            footer="Active chats →"
+            preset="periodProgress"
           />
           <DashboardMetricLink
             href="/admin/quotes?status=Quoted"

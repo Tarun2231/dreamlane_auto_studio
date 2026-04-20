@@ -35,6 +35,9 @@ yarn-error.log*
 !.env.example
 !**/.env.example
 
+# local admin image uploads (disk fallback when Cloudinary is not used)
+backend/uploads/
+
 # vercel
 .vercel
 

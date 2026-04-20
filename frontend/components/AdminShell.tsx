@@ -69,6 +69,26 @@ function IconDocument() {
   );
 }
 
+function IconChat() {
+  return (
+    <svg className="h-5 w-5 shrink-0 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M2.25 12.76c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a11.448 11.448 0 005.814-5.686 2.25 2.25 0 00-1.588-3.113 2.25 2.25 0 00-2.422-.655 11.5 11.5 0 01-4.714-.43L2.25 12.76z"
+      />
+    </svg>
+  );
+}
+
+function IconShopping() {
+  return (
+    <svg className="h-5 w-5 shrink-0 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l3.97 14.99a1.125 1.125 0 0 0 1.092.805h8.308a1.125 1.125 0 0 0 1.091-.805l3.97-14.99a1.125 1.125 0 0 0-1.091-1.165H6.622M2.25 3h-.75m.75 0h15.75m-12.75 0v-.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V3M9.75 18a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm6 0a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z" />
+    </svg>
+  );
+}
+
 function IconCar() {
   return (
     <svg className="h-5 w-5 shrink-0 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden>
@@ -81,18 +101,37 @@ function IconCar() {
   );
 }
 
+function IconReviews() {
+  return (
+    <svg className="h-5 w-5 shrink-0 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m9 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m8.25-4.5V18a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 18V7.5A2.25 2.25 0 0 1 5.25 5.25h13.5A2.25 2.25 0 0 1 21 7.5v.75m-9-3h.008v.008H12V5.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z"
+      />
+    </svg>
+  );
+}
+
 const items: NavItem[] = [
   { href: "/admin", label: "Dashboard", icon: <IconDashboard /> },
   { href: "/admin/services", label: "Services", icon: <IconWrench /> },
+  { href: "/admin/shop", label: "Shop products", icon: <IconShopping /> },
+  { href: "/admin/shop/orders", label: "Shop orders", icon: <IconDocument /> },
   { href: "/admin/slots", label: "Slots", icon: <IconClock /> },
   { href: "/admin/bookings", label: "Bookings", icon: <IconCalendar /> },
   { href: "/admin/customers", label: "Customers", icon: <IconUsers /> },
   { href: "/admin/cars", label: "Cars", icon: <IconCar /> },
   { href: "/admin/quotes", label: "Quotes", icon: <IconDocument /> },
+  { href: "/admin/enquiries", label: "Enquiries", icon: <IconChat /> },
+  { href: "/admin/reviews", label: "Reviews", icon: <IconReviews /> },
+  { href: "/admin/project-report", label: "Project report", icon: <IconDocument /> },
 ];
 
 function navActive(href: string, pathname: string) {
   if (href === "/admin") return pathname === "/admin" || pathname === "/admin/";
+  /** `/admin/shop` must not match `/admin/shop/orders` (prefix collision). */
+  if (href === "/admin/shop") return pathname === "/admin/shop" || pathname === "/admin/shop/";
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -251,7 +290,9 @@ export default function AdminShell({ children }: { children: ReactNode }) {
           <div className="flex items-start justify-between gap-2 border-b border-zinc-100 px-5 pb-4 pt-5 dark:border-zinc-800 md:border-0 md:pb-0">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Operations</p>
-              <h2 className="mt-1 text-xl font-bold text-zinc-900 dark:text-zinc-50">Admin</h2>
+              <Link href="/admin" className="mt-1 inline-block text-xl font-bold text-zinc-900 hover:opacity-85 dark:text-zinc-50">
+                Admin
+              </Link>
             </div>
             <button
               type="button"
@@ -267,24 +308,6 @@ export default function AdminShell({ children }: { children: ReactNode }) {
             <SidebarNav pathname={pathname} onNavigate={() => setMobileNavOpen(false)} />
             <AdminLoginHistorySidebar />
             <div className="mt-auto space-y-2 border-t border-zinc-200 pt-6 dark:border-zinc-800">
-              <Link
-                href="/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40"
-              >
-                <span aria-hidden className="text-base">
-                  ↗
-                </span>
-                View live site
-              </Link>
-              <button
-                type="button"
-                onClick={logout}
-                className="w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
-              >
-                Log out
-              </button>
               <p className="px-1 pt-2 text-[10px] leading-relaxed text-zinc-400 dark:text-zinc-500">
                 Panel v{ADMIN_APP_VERSION}
               </p>

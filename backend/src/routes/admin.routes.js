@@ -2,23 +2,192 @@ const express = require("express");
 const mongoose = require("mongoose");
 const multer = require("multer");
 const nodemailer = require("nodemailer");
-const { storage } = require("../config/cloudinary");
+const path = require("path");
+const fs = require("fs");
+const { storage, serviceImageStorage, shopProductImageStorage, isCloudinaryConfigured } = require("../config/cloudinary");
+const { localServiceImage, localShopProductImage, publicImageUrl } = require("../config/localImageUpload");
 const { protectAdmin } = require("../middleware/auth");
 const AdminLoginEvent = require("../models/AdminLoginEvent");
+const ShopOrder = require("../models/ShopOrder");
+const ShopProduct = require("../models/ShopProduct");
 const Service = require("../models/Service");
 const Slot = require("../models/Slot");
 const Booking = require("../models/Booking");
 const QuoteRequest = require("../models/QuoteRequest");
+const Review = require("../models/Review");
+const SitePresence = require("../models/SitePresence");
 const JobCard = require("../models/JobCard");
 const Inspection = require("../models/Inspection");
 const { buildJobSheetPdfBuffer } = require("../utils/jobSheetPdf");
 const { buildInvoicePdfBuffer } = require("../utils/invoicePdf");
 const { buildCustomerDirectory } = require("../utils/customerDirectory");
+const { effectiveUnitPriceInr, slugify } = require("../utils/shopHelpers");
 
 const router = express.Router();
+
+async function shopSalesSnapshot(isOverall, rangeStart, rangeEnd) {
+  const match = { status: { $ne: "cancelled" } };
+  if (!isOverall && rangeStart && rangeEnd) {
+    match.orderDateYmd = { $gte: String(rangeStart), $lte: String(rangeEnd) };
+  }
+  const [totals, groupRows] = await Promise.all([
+    ShopOrder.aggregate([
+      { $match: match },
+      { $group: { _id: null, revenueInr: { $sum: "$totalInr" }, ordersCount: { $sum: 1 } } },
+    ]),
+    ShopOrder.aggregate([
+      { $match: match },
+      { $unwind: "$items" },
+      {
+        $group: {
+          _id: { $ifNull: ["$items.productGroup", "accessory"] },
+          revenueInr: { $sum: "$items.lineTotal" },
+        },
+      },
+    ]),
+  ]);
+  const row = totals[0];
+  const out = {
+    revenueInr: row && Number.isFinite(row.revenueInr) ? row.revenueInr : 0,
+    ordersCount: row && Number.isFinite(row.ordersCount) ? row.ordersCount : 0,
+    machinesRevenueInr: 0,
+    accessoriesRevenueInr: 0,
+    otherRevenueInr: 0,
+  };
+  for (const g of groupRows) {
+    const k = g._id;
+    const v = Number.isFinite(g.revenueInr) ? g.revenueInr : 0;
+    if (k === "machine") out.machinesRevenueInr = v;
+    else if (k === "accessory") out.accessoriesRevenueInr = v;
+    else if (k === "other") out.otherRevenueInr = v;
+  }
+  return out;
+}
 const upload = multer({ storage });
+const imageUploadLimits = { fileSize: 5 * 1024 * 1024 };
+const imageFileFilter = (req, file, cb) => {
+  if (!/^image\/(jpeg|jpg|png|gif|webp)$/i.test(file.mimetype)) {
+    return cb(new Error("Only JPEG, PNG, GIF, and WebP images are allowed."));
+  }
+  cb(null, true);
+};
+const uploadServiceImage = multer({
+  storage: serviceImageStorage,
+  limits: imageUploadLimits,
+  fileFilter: imageFileFilter,
+});
+const uploadShopProductImage = multer({
+  storage: shopProductImageStorage,
+  limits: imageUploadLimits,
+  fileFilter: imageFileFilter,
+});
+
+const threadAttachmentDir = path.join(__dirname, "..", "..", "uploads", "public", "thread-attachments");
+fs.mkdirSync(threadAttachmentDir, { recursive: true });
+const threadAttachmentUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, threadAttachmentDir),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(String(file.originalname || "")).toLowerCase();
+      const ok = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf"].includes(ext) ? ext : "";
+      cb(null, `${Date.now()}-${Math.random().toString(36).slice(2, 10)}${ok || ""}`);
+    },
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const mt = String(file.mimetype || "").toLowerCase();
+    if (/^image\/(jpeg|jpg|png|gif|webp)$/.test(mt) || mt === "application/pdf") return cb(null, true);
+    cb(new Error("Only images (JPG/PNG/GIF/WebP) and PDF files are allowed."));
+  },
+});
+
+function sanitizeMessageAttachments(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .slice(0, 5)
+    .map((a) => ({
+      kind: a?.kind === "pdf" ? "pdf" : "image",
+      url: typeof a?.url === "string" ? a.url.trim() : "",
+      name: typeof a?.name === "string" ? a.name.trim().slice(0, 180) : "",
+      sizeBytes: Number.isFinite(Number(a?.sizeBytes)) ? Math.max(0, Number(a.sizeBytes)) : 0,
+      mimeType: typeof a?.mimeType === "string" ? a.mimeType.trim().slice(0, 120) : "",
+    }))
+    .filter((a) => a.url.startsWith("/api/uploads/thread-attachments/"));
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function renderMailCard({ eyebrow, title, intro, bodyHtml, ctaLabel, ctaHref, footnote }) {
+  const cta = ctaLabel && ctaHref
+    ? `<a href="${escapeHtml(ctaHref)}" style="display:inline-block;background:#111827;color:#fff;text-decoration:none;padding:10px 14px;border-radius:999px;font-weight:700">${escapeHtml(ctaLabel)}</a>`
+    : "";
+  return `
+    <div style="font-family:Inter,Segoe UI,Arial,sans-serif;background:#f4f7fb;padding:18px">
+      <div style="max-width:680px;margin:0 auto;background:#ffffff;border-radius:14px;border:1px solid #e7ecf3;overflow:hidden">
+        <div style="background:linear-gradient(135deg,#0f172a,#2563eb);padding:16px 20px;color:#fff">
+          <div style="font-size:12px;letter-spacing:.08em;opacity:.85;text-transform:uppercase">${escapeHtml(eyebrow || "Update")}</div>
+          <h2 style="margin:6px 0 0 0;font-size:20px;line-height:1.25">${escapeHtml(title || "Notification")}</h2>
+        </div>
+        <div style="padding:18px 20px;color:#0f172a">
+          <p style="margin:0 0 10px 0">${escapeHtml(intro || "")}</p>
+          <div style="padding:12px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;margin:0 0 14px 0">${bodyHtml || ""}</div>
+          ${cta}
+          ${footnote ? `<p style="margin:12px 0 0 0;font-size:12px;color:#64748b">${escapeHtml(footnote)}</p>` : ""}
+        </div>
+      </div>
+    </div>
+  `;
+}
 
 router.use(protectAdmin);
+
+/** Admin-controlled public support badge status (homepage: online/offline). */
+router.get("/site-presence", async (_req, res) => {
+  try {
+    let doc = await SitePresence.findOne().lean();
+    if (!doc) {
+      doc = await SitePresence.create({ supportStatus: "online" });
+      doc = doc.toObject();
+    }
+    res.json({
+      supportStatus: ["online", "offline", "break"].includes(String(doc.supportStatus)) ? doc.supportStatus : "online",
+      updatedAt: doc.updatedAt || null,
+      updatedByEmail: doc.updatedByEmail || "",
+    });
+  } catch (e) {
+    console.error("GET /admin/site-presence", e);
+    res.status(500).json({ message: "Could not load support status." });
+  }
+});
+
+router.put("/site-presence", async (req, res) => {
+  try {
+    const next = String(req.body?.supportStatus || "").toLowerCase();
+    if (!["online", "offline", "break"].includes(next)) {
+      return res.status(400).json({ message: "supportStatus must be online, offline, or break." });
+    }
+    const updated = await SitePresence.findOneAndUpdate(
+      {},
+      { $set: { supportStatus: next, updatedByEmail: String(req.user?.email || "") } },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    ).lean();
+    res.json({
+      supportStatus: updated.supportStatus,
+      updatedAt: updated.updatedAt || null,
+      updatedByEmail: updated.updatedByEmail || "",
+    });
+  } catch (e) {
+    console.error("PUT /admin/site-presence", e);
+    res.status(500).json({ message: "Could not update support status." });
+  }
+});
 
 /** Recent successful admin sign-ins (IP + geo label from login time). */
 router.get("/login-history", async (req, res) => {
@@ -344,6 +513,105 @@ async function workshopInsights(rangeStart, rangeEnd, todayYmd, isOverall) {
   };
 }
 
+function formatYmdLocal(d = new Date()) {
+  try {
+    return new Date(d).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  } catch {
+    return "";
+  }
+}
+
+function normalizedRequestKind(q) {
+  if (q && q.requestKind === "enquiry") return "enquiry";
+  return "quotation";
+}
+
+async function buildAdminNotifications(limit = 40) {
+  const perBucket = Math.min(40, Math.max(10, Math.ceil(limit / 2)));
+  const [bookings, quotes, payments] = await Promise.all([
+    Booking.find()
+      .sort({ createdAt: -1 })
+      .limit(perBucket)
+      .select("_id customerName date time carMake carModel vehicleYear createdAt")
+      .lean(),
+    QuoteRequest.find()
+      .sort({ createdAt: -1 })
+      .limit(perBucket)
+      .select("_id customerName requestKind enquiryTopic serviceNameSnapshot serviceDescription createdAt lastThreadActivityAt messages")
+      .lean(),
+    Booking.find({
+      paymentStatus: { $in: ["paid", "partial"] },
+      $or: [{ paymentReceivedYmd: { $exists: true, $ne: "" } }, { finalAmount: { $gt: 0 } }],
+    })
+      .sort({ updatedAt: -1 })
+      .limit(perBucket)
+      .select("_id customerName finalAmount paymentStatus paymentReceivedYmd updatedAt")
+      .lean(),
+  ]);
+
+  const bookingEvents = bookings.map((b) => {
+    const vehicle = [b.carMake, b.carModel].filter(Boolean).join(" ");
+    const suffix = b.vehicleYear ? ` (${b.vehicleYear})` : "";
+    return {
+      id: `booking-${String(b._id)}`,
+      kind: "booking",
+      title: "New booking received",
+      message: `${b.customerName || "Customer"}${vehicle ? ` · ${vehicle}${suffix}` : ""}${b.date ? ` · ${b.date}${b.time ? ` ${b.time}` : ""}` : ""}`,
+      href: `/admin/bookings`,
+      at: b.createdAt || new Date(),
+    };
+  });
+
+  const quoteEvents = quotes.map((q) => {
+    const rk = normalizedRequestKind(q);
+    const title = rk === "enquiry" ? "New enquiry received" : "New quotation request";
+    const topic = rk === "enquiry" ? q.enquiryTopic || q.serviceDescription || "Customer enquiry" : q.serviceNameSnapshot || q.serviceDescription || "Quotation request";
+    return {
+      id: `quote-${String(q._id)}`,
+      kind: rk,
+      title,
+      message: `${q.customerName || "Customer"} · ${String(topic).slice(0, 120)}`,
+      href: rk === "enquiry" ? `/admin/enquiries?open=${encodeURIComponent(String(q._id))}` : `/admin/quotes?open=${encodeURIComponent(String(q._id))}`,
+      at: q.createdAt || new Date(),
+    };
+  });
+
+  const threadEvents = quotes
+    .map((q) => {
+      const rk = normalizedRequestKind(q);
+      const arr = Array.isArray(q.messages) ? q.messages : [];
+      const lastMsg = arr.length > 0 ? arr[arr.length - 1] : null;
+      if (!lastMsg || lastMsg.role !== "customer") return null;
+      const at = q.lastThreadActivityAt || lastMsg.createdAt || q.createdAt || new Date();
+      const snippet = String(lastMsg.body || "").trim().slice(0, 96);
+      return {
+        id: `thread-${String(q._id)}-${new Date(at).toISOString()}`,
+        kind: rk === "enquiry" ? "enquiry-message" : "quotation-message",
+        title: rk === "enquiry" ? "New customer reply on enquiry" : "New customer reply on quotation",
+        message: `${q.customerName || "Customer"}${snippet ? ` · ${snippet}` : ""}`,
+        href: rk === "enquiry" ? `/admin/enquiries?open=${encodeURIComponent(String(q._id))}` : `/admin/quotes?open=${encodeURIComponent(String(q._id))}`,
+        at,
+      };
+    })
+    .filter(Boolean);
+
+  const paymentEvents = payments.map((b) => {
+    const amount = Number.isFinite(Number(b.finalAmount)) ? Number(b.finalAmount) : 0;
+    return {
+      id: `payment-${String(b._id)}-${String(b.updatedAt || "")}`,
+      kind: "payment",
+      title: "Payment received",
+      message: `${b.customerName || "Customer"} · ${amount > 0 ? `INR ${Math.round(amount).toLocaleString("en-IN")}` : "Amount updated"}${b.paymentStatus ? ` · ${String(b.paymentStatus).toUpperCase()}` : ""}${b.paymentReceivedYmd ? ` · ${formatYmdLocal(b.paymentReceivedYmd)}` : ""}`,
+      href: `/admin/bookings`,
+      at: b.updatedAt || new Date(),
+    };
+  });
+
+  return [...bookingEvents, ...quoteEvents, ...threadEvents, ...paymentEvents]
+    .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
+    .slice(0, Math.min(120, Math.max(10, limit)));
+}
+
 router.get("/dashboard", async (req, res) => {
   const today = ymdLocal();
   const qp = String(req.query.period || "day").toLowerCase();
@@ -360,15 +628,17 @@ router.get("/dashboard", async (req, res) => {
     req.query.dateTo && /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.dateTo)) ? String(req.query.dateTo) : null;
 
   if (period === "overall") {
-    const [totalBookings, todaysBookings, activeServices, completedAllTime, periodCounts, attention, insights] = await Promise.all([
-      Booking.countDocuments(),
-      Booking.countDocuments({ date: today }),
-      Service.countDocuments(),
-      Booking.countDocuments({ status: "Completed" }),
-      countByStatusOverall(),
-      attentionSnapshot(today),
-      workshopInsights(today, today, today, true),
-    ]);
+    const [totalBookings, todaysBookings, activeServices, completedAllTime, periodCounts, attention, insights, shopSales] =
+      await Promise.all([
+        Booking.countDocuments(),
+        Booking.countDocuments({ date: today }),
+        Service.countDocuments(),
+        Booking.countDocuments({ status: "Completed" }),
+        countByStatusOverall(),
+        attentionSnapshot(today),
+        workshopInsights(today, today, today, true),
+        shopSalesSnapshot(true, null, null),
+      ]);
     return res.json({
       totalBookings,
       todaysBookings,
@@ -377,6 +647,7 @@ router.get("/dashboard", async (req, res) => {
       today,
       attention,
       insights,
+      shopSales,
       period: {
         type: "overall",
         ref,
@@ -439,6 +710,7 @@ router.get("/dashboard", async (req, res) => {
     periodCounts,
     attention,
     insights,
+    shopSales,
   ] = await Promise.all([
     Booking.countDocuments(),
     Booking.countDocuments({ date: today }),
@@ -447,6 +719,7 @@ router.get("/dashboard", async (req, res) => {
     countByStatusInDateRange(rangeStart, rangeEnd),
     attentionSnapshot(today),
     workshopInsights(rangeStart, rangeEnd, today, false),
+    shopSalesSnapshot(false, rangeStart, rangeEnd),
   ]);
 
   res.json({
@@ -457,6 +730,7 @@ router.get("/dashboard", async (req, res) => {
     today,
     attention,
     insights,
+    shopSales,
     period: {
       type: responseType,
       ref,
@@ -466,6 +740,18 @@ router.get("/dashboard", async (req, res) => {
       ...periodCounts,
     },
   });
+});
+
+router.get("/notifications", async (req, res) => {
+  try {
+    const limitRaw = Number(req.query.limit);
+    const limit = Math.min(120, Math.max(10, Number.isFinite(limitRaw) ? Math.floor(limitRaw) : 40));
+    const items = await buildAdminNotifications(limit);
+    res.json({ items, generatedAt: new Date().toISOString() });
+  } catch (e) {
+    console.error("GET /admin/notifications", e);
+    res.status(500).json({ message: "Could not load notifications." });
+  }
 });
 
 /** Normalized key for grouping the same physical vehicle across bookings and quotes. */
@@ -580,15 +866,16 @@ router.get("/quote-stats", async (req, res) => {
             },
           }
         : {};
-    const [submitted, quoted, accepted, declined, closed, total] = await Promise.all([
+    const [submitted, pending, quoted, accepted, declined, closed, total] = await Promise.all([
       QuoteRequest.countDocuments({ ...scope, status: "Submitted" }),
+      QuoteRequest.countDocuments({ ...scope, status: "Pending" }),
       QuoteRequest.countDocuments({ ...scope, status: "Quoted" }),
       QuoteRequest.countDocuments({ ...scope, status: "Accepted" }),
       QuoteRequest.countDocuments({ ...scope, status: "Declined" }),
       QuoteRequest.countDocuments({ ...scope, status: "Closed" }),
       QuoteRequest.countDocuments(scope),
     ]);
-    res.json({ submitted, quoted, accepted, declined, closed, total });
+    res.json({ submitted, pending, quoted, accepted, declined, closed, total });
   } catch (e) {
     console.error("GET /admin/quote-stats", e);
     res.status(500).json({ message: "Could not load quote stats." });
@@ -758,6 +1045,56 @@ router.get("/cars", async (req, res) => {
   }
 });
 
+/** Upload a service hero image. Uses Cloudinary when configured; otherwise saves under /api/uploads/service-images/. */
+router.post("/upload/service-image", (req, res, next) => {
+  const uploader = isCloudinaryConfigured() ? uploadServiceImage : localServiceImage;
+  uploader.single("image")(req, res, (err) => {
+    if (err) {
+      const msg = err.message || "Upload failed.";
+      return res.status(400).json({ message: msg });
+    }
+    next();
+  });
+}, async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded." });
+    }
+    const url = isCloudinaryConfigured()
+      ? req.file.path
+      : publicImageUrl("service-images", req.file.filename);
+    res.json({ url });
+  } catch (e) {
+    console.error("POST /upload/service-image", e);
+    res.status(500).json({ message: e.message || "Upload failed." });
+  }
+});
+
+/** Upload a shop product image. Uses Cloudinary when configured; otherwise saves under /api/uploads/shop-products/. */
+router.post("/upload/shop-product-image", (req, res, next) => {
+  const uploader = isCloudinaryConfigured() ? uploadShopProductImage : localShopProductImage;
+  uploader.single("image")(req, res, (err) => {
+    if (err) {
+      const msg = err.message || "Upload failed.";
+      return res.status(400).json({ message: msg });
+    }
+    next();
+  });
+}, async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded." });
+    }
+    const url = isCloudinaryConfigured()
+      ? req.file.path
+      : publicImageUrl("shop-products", req.file.filename);
+    res.json({ url });
+  } catch (e) {
+    console.error("POST /upload/shop-product-image", e);
+    res.status(500).json({ message: e.message || "Upload failed." });
+  }
+});
+
 router.post("/service", async (req, res) => {
   const service = await Service.create(req.body);
   res.status(201).json(service);
@@ -889,6 +1226,31 @@ router.get("/bookings", async (req, res) => {
     .populate("serviceId")
     .sort({ createdAt: -1 });
   res.json(bookings);
+});
+
+/** Single booking + job card for admin drill-down (e.g. customer service history). */
+router.get("/bookings/:bookingId", async (req, res) => {
+  try {
+    const id = req.params.bookingId;
+    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ message: "Invalid booking id." });
+    const booking = await Booking.findById(id).populate("serviceId");
+    if (!booking) return res.status(404).json({ message: "Booking not found." });
+    const jc = await JobCard.findOne({ bookingId: id }).lean();
+    const jobCard = jc
+      ? {
+          servicesDone: Array.isArray(jc.servicesDone) ? jc.servicesDone : [],
+          partsUsed: Array.isArray(jc.partsUsed) ? jc.partsUsed : [],
+          extraCharges: jc.extraCharges != null ? Number(jc.extraCharges) : 0,
+          partsCostInr: jc.partsCostInr != null ? Number(jc.partsCostInr) : 0,
+          miscCostsInr: jc.miscCostsInr != null ? Number(jc.miscCostsInr) : 0,
+          notes: jc.notes ? String(jc.notes) : "",
+        }
+      : null;
+    res.json({ booking, jobCard });
+  } catch (e) {
+    console.error("GET /admin/bookings/:bookingId", e);
+    res.status(500).json({ message: "Could not load booking" });
+  }
 });
 
 router.put("/booking/status/:id", async (req, res) => {
@@ -1157,15 +1519,212 @@ router.post("/customers/send-email", async (req, res) => {
   }
 });
 
-/** List quotation requests (newest first). */
+/** List quotation / enquiry requests (newest thread activity first; message counts without full thread payload). */
 router.get("/quote-requests", async (req, res) => {
-  const { status } = req.query;
+  const { status, kind, dateFrom, dateTo } = req.query;
   const query = {};
   if (status && String(status).trim()) {
     query.status = String(status).trim();
   }
-  const list = await QuoteRequest.find(query).populate("serviceId").sort({ createdAt: -1 }).limit(500);
-  res.json(list);
+  const k = kind ? String(kind).trim().toLowerCase() : "";
+  if (k === "enquiry") {
+    query.requestKind = "enquiry";
+  } else if (k === "quotation") {
+    query.$or = [
+      { requestKind: "quotation" },
+      { requestKind: { $exists: false } },
+      { requestKind: null },
+    ];
+  }
+  const df = dateFrom && /^\d{4}-\d{2}-\d{2}$/.test(String(dateFrom)) ? String(dateFrom) : "";
+  const dt = dateTo && /^\d{4}-\d{2}-\d{2}$/.test(String(dateTo)) ? String(dateTo) : "";
+  if (df && dt && df <= dt) {
+    query.createdAt = {
+      $gte: new Date(`${df}T00:00:00.000Z`),
+      $lte: new Date(`${dt}T23:59:59.999Z`),
+    };
+  }
+  const list = await QuoteRequest.find(query).populate("serviceId").sort({ lastThreadActivityAt: -1, createdAt: -1 }).limit(500).lean();
+  const out = list.map((r) => {
+    const messageCount = Array.isArray(r.messages) ? r.messages.length : 0;
+    const hasUnreadCustomerMessage =
+      r.status !== "Closed" &&
+      Array.isArray(r.messages) &&
+      r.messages.length > 0
+        ? String(r.messages[r.messages.length - 1]?.role || "") === "customer"
+        : false;
+    const { messages, ...rest } = r;
+    return { ...rest, messageCount, hasUnreadCustomerMessage };
+  });
+  res.json(out);
+});
+
+/** Single quotation with full message thread (admin). */
+router.get("/quote-request/:id", async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ message: "Invalid id." });
+  const quote = await QuoteRequest.findById(req.params.id).populate("serviceId");
+  if (!quote) return res.status(404).json({ message: "Quote request not found." });
+  res.json(quote);
+});
+
+/** Workshop reply in the enquiry conversation. */
+router.post("/quote-request/:id/message", async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ message: "Invalid id." });
+  const body = typeof req.body?.body === "string" ? req.body.body.trim() : "";
+  const attachments = sanitizeMessageAttachments(req.body?.attachments);
+  if ((!body && attachments.length === 0) || body.length > 8000) {
+    return res.status(400).json({ message: "Message or attachment is required (max 8000 characters)." });
+  }
+  const existing = await QuoteRequest.findById(req.params.id);
+  if (!existing) return res.status(404).json({ message: "Quote request not found." });
+  const adminEmail = req.user?.email || "";
+  const adminLabel = adminEmail.includes("@") ? adminEmail.split("@")[0].slice(0, 80) : "Workshop";
+  const now = new Date();
+  const quote = await QuoteRequest.findByIdAndUpdate(
+    req.params.id,
+    {
+      $push: { messages: { role: "admin", body, attachments, createdAt: now, adminLabel } },
+      $set: {
+        lastThreadActivityAt: now,
+        status: "Closed",
+      },
+    },
+    { new: true }
+  ).populate("serviceId");
+
+  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+    try {
+      const transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port: Number(process.env.SMTP_PORT || 587),
+        secure: false,
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: String(process.env.SMTP_PASS || "").replace(/\s+/g, ""),
+        },
+      });
+      const garage = process.env.JOB_SHEET_GARAGE_NAME || process.env.SMTP_FROM || "Workshop";
+      const origin = String(process.env.PUBLIC_WEB_URL || process.env.SITE_URL || "http://localhost:3000")
+        .trim()
+        .replace(/\/$/, "");
+      const trackPath = `/quote/track?id=${encodeURIComponent(String(quote._id))}&email=${encodeURIComponent(String(quote.email))}`;
+      const trackUrl = `${origin}${trackPath}`;
+      const html = `
+        <div style="font-family:Inter,Segoe UI,Arial,sans-serif;background:#f6f8fb;padding:18px">
+          <div style="max-width:640px;margin:0 auto;background:#ffffff;border-radius:14px;border:1px solid #e7ecf3;overflow:hidden">
+            <div style="background:linear-gradient(135deg,#0f172a,#2563eb);padding:16px 20px;color:#fff">
+              <div style="font-size:12px;letter-spacing:.08em;opacity:.82;text-transform:uppercase">Enquiry update</div>
+              <h2 style="margin:6px 0 0 0;font-size:20px;line-height:1.25">Admin sent you a new message</h2>
+            </div>
+            <div style="padding:18px 20px;color:#0f172a">
+              <p style="margin:0 0 10px 0">Hi ${escapeHtml(quote.customerName)},</p>
+              <p style="margin:0 0 12px 0">You received a new message from our workshop admin.</p>
+              <p style="margin:0 0 14px 0">To read the latest reply and continue the conversation, open your Track enquiry page.</p>
+              <a href="${escapeHtml(trackUrl)}" style="display:inline-block;background:#111827;color:#fff;text-decoration:none;padding:10px 14px;border-radius:999px;font-weight:700">Track enquiry and reply</a>
+              <p style="margin:12px 0 0 0;font-size:12px;color:#64748b">Request ID: ${escapeHtml(String(quote._id))} · Current status: Closed (auto-updated after admin reply)</p>
+            </div>
+          </div>
+        </div>
+      `;
+      await transporter.sendMail({
+        from: process.env.SMTP_FROM || process.env.SMTP_USER,
+        to: quote.email,
+        subject: `Message from ${garage} — enquiry ${String(quote._id).slice(-8)}`,
+        text: `Hi ${quote.customerName},\n\nYou have received a new message from our workshop admin.\n\nOpen Track enquiry to read and continue chat: ${trackUrl}\n\nRequest ID: ${String(quote._id)}\nCurrent status: Closed (auto-updated after admin reply)\n\n— ${garage}`,
+        html,
+      });
+    } catch (e) {
+      console.error("POST /quote-request/:id/message email:", e?.message || e);
+    }
+  }
+
+  res.json(quote);
+});
+
+/** Edit a previously sent admin message in thread. */
+router.patch("/quote-request/:id/message/:messageId", async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ message: "Invalid id." });
+  if (!mongoose.isValidObjectId(req.params.messageId)) return res.status(400).json({ message: "Invalid message id." });
+  const body = typeof req.body?.body === "string" ? req.body.body.trim() : "";
+  if (!body || body.length > 8000) {
+    return res.status(400).json({ message: "Message is required (max 8000 characters)." });
+  }
+  const quote = await QuoteRequest.findById(req.params.id);
+  if (!quote) return res.status(404).json({ message: "Quote request not found." });
+  const msg = quote.messages.id(req.params.messageId);
+  if (!msg) return res.status(404).json({ message: "Message not found." });
+  if (msg.role !== "admin") return res.status(400).json({ message: "Only admin messages can be edited." });
+  msg.body = body;
+  quote.lastThreadActivityAt = new Date();
+  await quote.save();
+  const updated = await QuoteRequest.findById(req.params.id).populate("serviceId");
+
+  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+    try {
+      const transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port: Number(process.env.SMTP_PORT || 587),
+        secure: false,
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: String(process.env.SMTP_PASS || "").replace(/\s+/g, ""),
+        },
+      });
+      const garage = process.env.JOB_SHEET_GARAGE_NAME || process.env.SMTP_FROM || "Workshop";
+      const origin = String(process.env.PUBLIC_WEB_URL || process.env.SITE_URL || "http://localhost:3000")
+        .trim()
+        .replace(/\/$/, "");
+      const trackUrl = `${origin}/quote/track?id=${encodeURIComponent(String(updated._id))}&email=${encodeURIComponent(String(updated.email))}`;
+      const html = `
+        <div style="font-family:Inter,Segoe UI,Arial,sans-serif;background:#f6f8fb;padding:18px">
+          <div style="max-width:640px;margin:0 auto;background:#ffffff;border-radius:14px;border:1px solid #e7ecf3;overflow:hidden">
+            <div style="background:linear-gradient(135deg,#0f172a,#2563eb);padding:16px 20px;color:#fff">
+              <div style="font-size:12px;letter-spacing:.08em;opacity:.82;text-transform:uppercase">Message updated</div>
+              <h2 style="margin:6px 0 0 0;font-size:20px;line-height:1.25">Admin updated a previous message</h2>
+            </div>
+            <div style="padding:18px 20px;color:#0f172a">
+              <p style="margin:0 0 10px 0">Hi ${escapeHtml(updated.customerName)},</p>
+              <p style="margin:0 0 12px 0">A message in your enquiry thread was updated by our admin.</p>
+              <p style="margin:0 0 14px 0">Please open Track enquiry to view the updated reply.</p>
+              <a href="${escapeHtml(trackUrl)}" style="display:inline-block;background:#111827;color:#fff;text-decoration:none;padding:10px 14px;border-radius:999px;font-weight:700">Open Track enquiry</a>
+            </div>
+          </div>
+        </div>
+      `;
+      await transporter.sendMail({
+        from: process.env.SMTP_FROM || process.env.SMTP_USER,
+        to: updated.email,
+        subject: `Updated message from ${garage} — enquiry ${String(updated._id).slice(-8)}`,
+        text: `Hi ${updated.customerName},\n\nAdmin updated a message in your enquiry thread.\n\nOpen Track enquiry to view it: ${trackUrl}\n\nRequest ID: ${String(updated._id)}\n\n— ${garage}`,
+        html,
+      });
+    } catch (e) {
+      console.error("PATCH /quote-request/:id/message/:messageId email:", e?.message || e);
+    }
+  }
+
+  res.json(updated);
+});
+
+router.post("/quote-request/:id/attachment", (req, res, next) => {
+  if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ message: "Invalid id." });
+  threadAttachmentUpload.single("file")(req, res, (err) => {
+    if (err) return res.status(400).json({ message: err.message || "Upload failed." });
+    next();
+  });
+}, async (req, res) => {
+  const existing = await QuoteRequest.findById(req.params.id).select("_id");
+  if (!existing) return res.status(404).json({ message: "Quote request not found." });
+  if (!req.file) return res.status(400).json({ message: "No file uploaded." });
+  const mime = String(req.file.mimetype || "").toLowerCase();
+  const kind = mime === "application/pdf" ? "pdf" : "image";
+  return res.json({
+    kind,
+    url: `/api/uploads/thread-attachments/${req.file.filename}`,
+    name: String(req.file.originalname || req.file.filename || "").slice(0, 180),
+    sizeBytes: Number(req.file.size || 0),
+    mimeType: mime,
+  });
 });
 
 /** Update quotation (amount, notes, status). */
@@ -1182,7 +1741,8 @@ router.put("/quote-request/:id", async (req, res) => {
   if (quoteNotes !== undefined && typeof quoteNotes === "string") {
     update.quoteNotes = quoteNotes.trim();
   }
-  const explicitStatus = status && ["Submitted", "Quoted", "Accepted", "Declined", "Closed"].includes(String(status));
+  const explicitStatus =
+    status && ["Submitted", "Pending", "Quoted", "Accepted", "Declined", "Closed"].includes(String(status));
   if (explicitStatus) {
     update.status = String(status);
   } else if (update.quotedAmount != null && update.quotedAmount > 0) {
@@ -1213,6 +1773,23 @@ router.post("/quote-request/:id/email-quote", async (req, res) => {
 
   const fmt = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });
   const body = `Hi ${quote.customerName},\n\nThank you for your enquiry. Here is our quotation for your reference ${quote._id}.\n\nQuoted amount: ${fmt.format(amt)}\n\n${quote.quoteNotes ? `Details:\n${quote.quoteNotes}\n\n` : ""}If you are happy with this, please open the “Track quote” link on our website, enter this reference ID and your email, and click Accept. You can then book a service slot or we will contact you to schedule.\n\nIf you have questions, reply to this email or call us.\n\nThank you.`;
+  const origin = String(process.env.PUBLIC_WEB_URL || process.env.SITE_URL || "http://localhost:3000")
+    .trim()
+    .replace(/\/$/, "");
+  const trackUrl = `${origin}/quote/track?id=${encodeURIComponent(String(quote._id))}&email=${encodeURIComponent(String(quote.email))}`;
+  const bodyHtml = renderMailCard({
+    eyebrow: "Quotation ready",
+    title: "Your service quotation is ready",
+    intro: `Hi ${quote.customerName}, we reviewed your request and shared the quotation below.`,
+    bodyHtml: `
+      <p style="margin:0 0 8px 0"><strong>Request ID:</strong> ${escapeHtml(String(quote._id))}</p>
+      <p style="margin:0 0 8px 0"><strong>Quoted amount:</strong> ${escapeHtml(fmt.format(amt))}</p>
+      ${quote.quoteNotes ? `<p style="margin:0"><strong>Details:</strong><br/>${escapeHtml(quote.quoteNotes).replace(/\n/g, "<br/>")}</p>` : ""}
+    `,
+    ctaLabel: "Track enquiry and respond",
+    ctaHref: trackUrl,
+    footnote: "Use your request ID + email to accept/decline and continue chat.",
+  });
 
   try {
     const transporter = nodemailer.createTransport({
@@ -1229,6 +1806,7 @@ router.post("/quote-request/:id/email-quote", async (req, res) => {
       to: quote.email,
       subject: `Your service quotation — ${String(quote._id).slice(-8)}`,
       text: body,
+      html: bodyHtml,
     });
     quote.status = "Quoted";
     quote.quotedAt = quote.quotedAt || new Date();
@@ -1237,6 +1815,219 @@ router.post("/quote-request/:id/email-quote", async (req, res) => {
   } catch (e) {
     console.error("email-quote:", e);
     res.status(500).json({ message: e.message || "Failed to send email." });
+  }
+});
+
+/** —— Shop products (headlights, wraps, kits) & orders —— */
+
+function parseProductGroup(raw) {
+  const g = String(raw || "").toLowerCase();
+  if (g === "machine" || g === "accessory" || g === "other") return g;
+  return "accessory";
+}
+
+router.get("/shop-products", async (_req, res) => {
+  try {
+    const rows = await ShopProduct.find().sort({ sortOrder: -1, createdAt: -1 }).lean();
+    res.json(
+      rows.map((p) => ({
+        ...p,
+        productGroup: parseProductGroup(p.productGroup),
+        effectivePrice: effectiveUnitPriceInr(p),
+        stock: p.stock == null || p.stock === undefined ? null : Math.floor(Number(p.stock)),
+      }))
+    );
+  } catch (e) {
+    console.error("admin GET /shop-products", e);
+    res.status(500).json({ message: "Could not load products" });
+  }
+});
+
+router.post("/shop-products", async (req, res) => {
+  try {
+    const { name, description, category, image, basePrice, discountPercent, isActive, sortOrder, productGroup, stock } = req.body || {};
+    const n = typeof name === "string" ? name.trim() : "";
+    if (!n) return res.status(400).json({ message: "Name is required." });
+    const price = Number(basePrice);
+    if (!Number.isFinite(price) || price < 0) return res.status(400).json({ message: "Valid base price is required." });
+    let baseSlug = slugify(n);
+    let slug = baseSlug;
+    let suf = 0;
+    while (await ShopProduct.findOne({ slug })) {
+      suf += 1;
+      slug = `${baseSlug}-${suf}`;
+    }
+    const disc = Math.min(100, Math.max(0, Number(discountPercent) || 0));
+    let stockVal;
+    if (stock === "" || stock === undefined || stock === null) stockVal = undefined;
+    else {
+      const s = Number(stock);
+      if (!Number.isFinite(s) || s < 0 || !Number.isInteger(s)) {
+        return res.status(400).json({ message: "Stock must be a whole number ≥ 0, or leave blank to not track stock." });
+      }
+      stockVal = s;
+    }
+    const doc = await ShopProduct.create({
+      name: n,
+      slug,
+      description: typeof description === "string" ? description : "",
+      productGroup: parseProductGroup(productGroup),
+      category: typeof category === "string" && category.trim() ? category.trim() : "General",
+      image: typeof image === "string" ? image.trim() : "",
+      basePrice: price,
+      discountPercent: disc,
+      ...(stockVal !== undefined ? { stock: stockVal } : {}),
+      isActive: isActive !== false,
+      sortOrder: Number.isFinite(Number(sortOrder)) ? Number(sortOrder) : 0,
+    });
+    const o = doc.toObject();
+    res.status(201).json({ ...o, effectivePrice: effectiveUnitPriceInr(o) });
+  } catch (e) {
+    console.error("admin POST /shop-products", e);
+    res.status(500).json({ message: e.message || "Could not create product" });
+  }
+});
+
+router.put("/shop-products/:id", async (req, res) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ message: "Invalid id." });
+    const p = await ShopProduct.findById(req.params.id);
+    if (!p) return res.status(404).json({ message: "Product not found." });
+    const { name, description, category, image, basePrice, discountPercent, isActive, sortOrder, productGroup, stock } = req.body || {};
+    if (name !== undefined) p.name = String(name).trim() || p.name;
+    if (description !== undefined) p.description = typeof description === "string" ? description : p.description;
+    if (productGroup !== undefined) p.productGroup = parseProductGroup(productGroup);
+    if (category !== undefined) p.category = String(category).trim() || "General";
+    if (image !== undefined) p.image = typeof image === "string" ? image : p.image;
+    if (basePrice !== undefined) {
+      const price = Number(basePrice);
+      if (!Number.isFinite(price) || price < 0) return res.status(400).json({ message: "Invalid base price." });
+      p.basePrice = price;
+    }
+    if (discountPercent !== undefined) {
+      const d = Number(discountPercent);
+      if (!Number.isFinite(d) || d < 0 || d > 100) return res.status(400).json({ message: "Discount must be 0–100." });
+      p.discountPercent = d;
+    }
+    if (isActive !== undefined) p.isActive = Boolean(isActive);
+    if (sortOrder !== undefined && Number.isFinite(Number(sortOrder))) p.sortOrder = Number(sortOrder);
+    let unsetStock = false;
+    if (stock !== undefined) {
+      if (stock === "" || stock === null) unsetStock = true;
+      else {
+        const s = Number(stock);
+        if (!Number.isFinite(s) || s < 0 || !Number.isInteger(s)) {
+          return res.status(400).json({ message: "Stock must be a whole number ≥ 0, or clear to not track stock." });
+        }
+        p.stock = s;
+      }
+    }
+    await p.save();
+    if (unsetStock) {
+      await ShopProduct.updateOne({ _id: p._id }, { $unset: { stock: 1 } });
+    }
+    const o = p.toObject();
+    res.json({ ...o, effectivePrice: effectiveUnitPriceInr(o) });
+  } catch (e) {
+    console.error("admin PUT /shop-products/:id", e);
+    res.status(500).json({ message: e.message || "Could not update product" });
+  }
+});
+
+router.delete("/shop-products/:id", async (req, res) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ message: "Invalid id." });
+    const p = await ShopProduct.findByIdAndUpdate(req.params.id, { $set: { isActive: false } }, { new: true });
+    if (!p) return res.status(404).json({ message: "Product not found." });
+    res.json({ ok: true, product: p });
+  } catch (e) {
+    console.error("admin DELETE /shop-products/:id", e);
+    res.status(500).json({ message: "Could not archive product" });
+  }
+});
+
+router.get("/shop-orders", async (req, res) => {
+  try {
+    const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 50));
+    const rows = await ShopOrder.find().sort({ createdAt: -1 }).limit(limit).lean();
+    res.json({ orders: rows });
+  } catch (e) {
+    console.error("admin GET /shop-orders", e);
+    res.status(500).json({ message: "Could not load orders" });
+  }
+});
+
+router.patch("/shop-orders/:id", async (req, res) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ message: "Invalid id." });
+    const { status } = req.body || {};
+    const allowed = ["pending", "confirmed", "fulfilled", "cancelled"];
+    if (!status || !allowed.includes(String(status))) {
+      return res.status(400).json({ message: `Status must be one of: ${allowed.join(", ")}` });
+    }
+    const order = await ShopOrder.findByIdAndUpdate(req.params.id, { $set: { status: String(status) } }, { new: true });
+    if (!order) return res.status(404).json({ message: "Order not found." });
+    res.json(order);
+  } catch (e) {
+    console.error("admin PATCH /shop-orders/:id", e);
+    res.status(500).json({ message: "Could not update order" });
+  }
+});
+
+/** Customer testimonials — approve to show on site, reject to remove from public view. */
+router.get("/reviews", async (req, res) => {
+  try {
+    const rawStatus = req.query.status;
+    const q = {};
+    if (rawStatus && ["pending", "approved", "rejected"].includes(String(rawStatus))) {
+      q.status = String(rawStatus);
+    }
+    const rows = await Review.find(q)
+      .sort({ createdAt: -1 })
+      .limit(200)
+      .populate({ path: "bookingId", select: "customerName email date status" })
+      .lean();
+    res.json({
+      items: rows.map((r) => {
+        const b = r.bookingId;
+        return {
+          id: String(r._id),
+          quote: r.quote,
+          authorDisplay: r.authorDisplay,
+          context: r.context,
+          status: r.status,
+          createdAt: r.createdAt,
+          bookingId: b ? String(b._id) : String(r.bookingId),
+          bookingEmail: b && b.email ? b.email : "",
+          bookingDate: b && b.date ? b.date : "",
+          bookingStatus: b && b.status ? b.status : "",
+        };
+      }),
+    });
+  } catch (e) {
+    console.error("admin GET /reviews", e);
+    res.status(500).json({ message: "Could not load reviews" });
+  }
+});
+
+router.patch("/reviews/:id", async (req, res) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ message: "Invalid id." });
+    const { status } = req.body || {};
+    const allowed = ["approved", "rejected"];
+    if (!status || !allowed.includes(String(status))) {
+      return res.status(400).json({ message: `Status must be one of: ${allowed.join(", ")}` });
+    }
+    const rev = await Review.findByIdAndUpdate(
+      req.params.id,
+      { $set: { status: String(status) } },
+      { new: true }
+    );
+    if (!rev) return res.status(404).json({ message: "Review not found." });
+    res.json(rev);
+  } catch (e) {
+    console.error("admin PATCH /reviews/:id", e);
+    res.status(500).json({ message: "Could not update review" });
   }
 });
 

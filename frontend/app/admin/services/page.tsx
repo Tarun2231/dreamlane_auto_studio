@@ -34,8 +34,31 @@ export default function AdminServicesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState(empty);
   const [busy, setBusy] = useState(false);
+  const [imageUploadBusy, setImageUploadBusy] = useState(false);
   const [message, setMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [query, setQuery] = useState("");
+
+  const uploadServiceImageFile = async (file: File, which: "add" | "edit") => {
+    setImageUploadBusy(true);
+    setMessage(null);
+    try {
+      const fd = new FormData();
+      fd.append("image", file);
+      const res = await adminApi.post<{ url: string }>("/upload/service-image", fd);
+      const u = res.data?.url;
+      if (!u || typeof u !== "string") throw new Error("No URL returned");
+      if (which === "add") setForm((f) => ({ ...f, image: u }));
+      else setEditForm((f) => ({ ...f, image: u }));
+      setMessage({ type: "ok", text: "Image uploaded. Save or add the service when you’re ready." });
+    } catch (e: unknown) {
+      const msg =
+        (e as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        "Upload failed. Use JPEG, PNG, GIF, or WebP under 5MB, or paste an image URL instead.";
+      setMessage({ type: "err", text: msg });
+    } finally {
+      setImageUploadBusy(false);
+    }
+  };
 
   const load = () =>
     api
@@ -199,18 +222,47 @@ export default function AdminServicesPage() {
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
               />
             </div>
-            <div className="sm:col-span-2">
-              <label className={labelClass} htmlFor="svc-image">
-                Image URL
-              </label>
-              <input
-                id="svc-image"
-                className={inputClass}
-                placeholder="https://… (optional — a default image is used if empty)"
-                type="url"
-                value={form.image}
-                onChange={(e) => setForm({ ...form, image: e.target.value })}
-              />
+            <div className="sm:col-span-2 space-y-2">
+              <span className={labelClass}>Image</span>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                <label className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-4 py-2.5 text-sm font-medium text-zinc-700 shadow-sm hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900/50 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                    className="sr-only"
+                    disabled={busy || imageUploadBusy}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      e.target.value = "";
+                      if (f) void uploadServiceImageFile(f, "add");
+                    }}
+                  />
+                  {imageUploadBusy ? "Uploading…" : "Upload image"}
+                </label>
+                {form.image.trim() ? (
+                  <div className="flex min-w-0 max-w-full items-center gap-3">
+                    <img
+                      src={serviceImageUrl(form.image)}
+                      alt=""
+                      className="h-16 w-16 shrink-0 rounded-lg border border-zinc-200 object-cover dark:border-zinc-600"
+                    />
+                    <p className="break-all text-xs text-zinc-500 dark:text-zinc-400">{form.image}</p>
+                  </div>
+                ) : null}
+              </div>
+              <div>
+                <label className={labelClass} htmlFor="svc-image">
+                  Image URL (optional — paste a link or use upload)
+                </label>
+                <input
+                  id="svc-image"
+                  className={inputClass}
+                  placeholder="https://… or leave empty for default placeholder image"
+                  type="text"
+                  value={form.image}
+                  onChange={(e) => setForm({ ...form, image: e.target.value })}
+                />
+              </div>
             </div>
             <div>
               <label className={labelClass} htmlFor="svc-price">
@@ -333,9 +385,43 @@ export default function AdminServicesPage() {
                           required
                         />
                       </div>
-                      <div className="sm:col-span-2">
-                        <label className={labelClass}>Image URL</label>
-                        <input className={inputClass} type="url" value={editForm.image} onChange={(e) => setEditForm({ ...editForm, image: e.target.value })} />
+                      <div className="sm:col-span-2 space-y-2">
+                        <span className={labelClass}>Image</span>
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                          <label className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-4 py-2.5 text-sm font-medium text-zinc-700 shadow-sm hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900/50 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                              className="sr-only"
+                              disabled={busy || imageUploadBusy}
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                e.target.value = "";
+                                if (f) void uploadServiceImageFile(f, "edit");
+                              }}
+                            />
+                            {imageUploadBusy ? "Uploading…" : "Upload image"}
+                          </label>
+                          {editForm.image.trim() ? (
+                            <div className="flex min-w-0 max-w-full items-center gap-3">
+                              <img
+                                src={serviceImageUrl(editForm.image)}
+                                alt=""
+                                className="h-16 w-16 shrink-0 rounded-lg border border-zinc-200 object-cover dark:border-zinc-600"
+                              />
+                              <p className="break-all text-xs text-zinc-500 dark:text-zinc-400">{editForm.image}</p>
+                            </div>
+                          ) : null}
+                        </div>
+                        <div>
+                          <label className={labelClass}>Image URL (optional — paste a link or use upload)</label>
+                          <input
+                            className={inputClass}
+                            type="text"
+                            value={editForm.image}
+                            onChange={(e) => setEditForm({ ...editForm, image: e.target.value })}
+                          />
+                        </div>
                       </div>
                       <div>
                         <label className={labelClass}>Base price (₹)</label>

@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { api } from "@/lib/api";
 import { Service } from "@/lib/types";
 import { modelsForMake, VEHICLE_MAKE_OPTIONS, VEHICLE_YEARS } from "@/lib/vehicleCatalog";
@@ -77,6 +76,7 @@ export default function QuoteRequestForm() {
         emailSent?: { customer?: boolean; workshop?: boolean };
         emailError?: string;
       }>("/quote-request", {
+        requestKind: "quotation",
         customerName: customerName.trim(),
         email: email.trim(),
         phone: phone.trim(),
@@ -278,9 +278,6 @@ export default function QuoteRequestForm() {
         >
           {loading ? "Sending…" : "Request quotation"}
         </button>
-        <Link href="/quote/track" className="text-sm font-medium text-amber-800 underline dark:text-amber-400">
-          Track an existing quote
-        </Link>
       </div>
     </div>
   );

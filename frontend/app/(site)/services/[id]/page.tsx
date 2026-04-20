@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { API_BASE } from "@/lib/api";
-import { serviceImageUrl } from "@/lib/images";
+import { serviceImageIsRemoteHttp, serviceImageUrl } from "@/lib/images";
 import { Service } from "@/lib/types";
 
 export default async function ServiceDetails({ params }: { params: Promise<{ id: string }> }) {
@@ -25,12 +25,18 @@ export default async function ServiceDetails({ params }: { params: Promise<{ id:
   }
   const service: Service = await res.json();
   const img = serviceImageUrl(service.image);
+  const remoteImg = serviceImageIsRemoteHttp(img);
 
   return (
     <main className="mx-auto w-full max-w-4xl px-4 py-10 md:py-14">
       <div className="card overflow-hidden shadow-lg">
         <div className="relative h-64 bg-zinc-200 md:h-80 dark:bg-zinc-800">
-          <Image src={img} alt={service.name} fill className="object-cover" sizes="100vw" priority />
+          {remoteImg ? (
+            // eslint-disable-next-line @next/next/no-img-element -- arbitrary remote URLs from admin (any host)
+            <img src={img} alt={service.name} className="absolute inset-0 h-full w-full object-cover" />
+          ) : (
+            <Image src={img} alt={service.name} fill className="object-cover" sizes="100vw" priority />
+          )}
           <span className="absolute bottom-4 left-4 rounded-full bg-black/65 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm">
             ~{service.duration} min
           </span>

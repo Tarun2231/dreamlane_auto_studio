@@ -30,21 +30,26 @@ const items = [
 
 export default function TrustFeatures() {
   return (
-    <section className="border-y border-black/5 bg-white/80 py-14 dark:border-white/10 dark:bg-zinc-900/50">
-      <div className="mx-auto max-w-6xl px-4">
+    <section className="border-y border-zinc-200/60 bg-gradient-to-b from-white to-zinc-50/90 py-14 dark:border-white/10 dark:from-zinc-950 dark:to-zinc-950/90 md:py-16">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-2xl font-bold tracking-tight md:text-3xl">Built for drivers who care</h2>
-          <p className="mt-2 text-sm text-gray-600 dark:text-zinc-400">A calm, premium experience — online and in the bay.</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-700/90 dark:text-amber-500/80">Why us</p>
+          <h2 className="mt-2 text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 md:text-2xl">
+            Built for drivers who care
+          </h2>
+          <p className="mt-2 text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
+            A clear experience online and in the workshop.
+          </p>
         </div>
-        <ul className="mt-10 grid gap-6 sm:grid-cols-3">
+        <ul className="mt-10 grid gap-5 sm:grid-cols-3 sm:gap-6">
           {items.map((item) => (
             <li
               key={item.title}
-              className="card group relative overflow-hidden p-6 transition duration-300 hover:-translate-y-0.5 hover:shadow-md"
+              className="rounded-2xl border border-zinc-200/80 bg-white/90 p-6 shadow-sm ring-1 ring-black/[0.02] transition hover:border-zinc-300 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900/60 dark:ring-white/5"
             >
               <div className="mb-4 inline-flex rounded-xl bg-amber-500/10 p-3 text-amber-800 dark:text-amber-400">{item.icon}</div>
-              <h3 className="font-semibold text-gray-900 dark:text-zinc-100">{item.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-gray-600 dark:text-zinc-400">{item.body}</p>
+              <h3 className="font-semibold text-zinc-900 dark:text-zinc-100">{item.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{item.body}</p>
             </li>
           ))}
         </ul>

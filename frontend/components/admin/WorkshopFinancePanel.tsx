@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 export type WorkshopFinance = {
   incomeInr: number;
   partsCostInr: number;
@@ -16,6 +18,8 @@ export type PaymentMetrics = {
   pendingCollection: number;
   outstandingInr: number;
 };
+
+const HIDE_AMOUNTS_STORAGE_KEY = "adminHideFinanceAmounts";
 
 function formatInr(n: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(
@@ -36,6 +40,16 @@ export default function WorkshopFinancePanel({
   loading: boolean;
   periodHint: string;
 }) {
+  const [hideAmounts, setHideAmounts] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem(HIDE_AMOUNTS_STORAGE_KEY) === "1";
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(HIDE_AMOUNTS_STORAGE_KEY, hideAmounts ? "1" : "0");
+  }, [hideAmounts]);
+
   if (loading) {
     return (
       <section className="card p-5 sm:p-6" aria-labelledby="income-heading">
@@ -62,6 +76,7 @@ export default function WorkshopFinancePanel({
   const miscCostsInr = finance?.miscCostsInr ?? 0;
   const totalCostsInr = finance?.totalDirectCostsInr ?? partsCostInr + miscCostsInr;
   const profitInr = finance?.profitInr ?? incomeInr - totalCostsInr;
+  const shownAmount = (n: number) => (hideAmounts ? "🙈 •••••" : formatInr(n));
 
   return (
     <section className="card p-5 sm:p-6" aria-labelledby="income-heading">
@@ -76,27 +91,48 @@ export default function WorkshopFinancePanel({
             parts and other costs on each booking&apos;s job card.
           </p>
         </div>
+        <button
+          type="button"
+          className="mt-2 inline-flex items-center gap-1.5 self-start rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700 sm:mt-0"
+          onClick={() => setHideAmounts((v) => !v)}
+          aria-pressed={hideAmounts}
+        >
+          {hideAmounts ? (
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden>
+              <path d="M3 3l18 18" />
+              <path d="M10.58 10.59A2 2 0 0 0 13.41 13.4" />
+              <path d="M9.88 5.09A10.94 10.94 0 0 1 12 5c5.2 0 9.27 3.19 10.74 7a11.7 11.7 0 0 1-3.12 4.43" />
+              <path d="M6.61 6.61A11.42 11.42 0 0 0 1.26 12a11.7 11.7 0 0 0 5.5 5.8A10.94 10.94 0 0 0 12 19c1.37 0 2.67-.24 3.88-.68" />
+            </svg>
+          ) : (
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden>
+              <path d="M1.5 12s3.8-7 10.5-7 10.5 7 10.5 7-3.8 7-10.5 7S1.5 12 1.5 12Z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          )}
+          {hideAmounts ? "Show amounts" : "Hide amounts"}
+        </button>
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/70 px-4 py-3 dark:border-emerald-900/50 dark:bg-emerald-950/30">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-900 dark:text-emerald-400">Income</p>
-          <p className="mt-1 text-xl font-bold tabular-nums text-emerald-950 dark:text-emerald-50">{formatInr(incomeInr)}</p>
+          <p className="mt-1 text-xl font-bold tabular-nums text-emerald-950 dark:text-emerald-50">{shownAmount(incomeInr)}</p>
           <p className="mt-1 text-[10px] text-emerald-900/85 dark:text-emerald-300/90">Billed on completed jobs</p>
         </div>
         <div className="rounded-xl border border-amber-200/80 bg-amber-50/70 px-4 py-3 dark:border-amber-900/45 dark:bg-amber-950/25">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-950 dark:text-amber-400">Spare parts spend</p>
-          <p className="mt-1 text-xl font-bold tabular-nums text-amber-950 dark:text-amber-100">{formatInr(partsCostInr)}</p>
+          <p className="mt-1 text-xl font-bold tabular-nums text-amber-950 dark:text-amber-100">{shownAmount(partsCostInr)}</p>
           <p className="mt-1 text-[10px] text-amber-950/85 dark:text-amber-300/90">From job cards (cost)</p>
         </div>
         <div className="rounded-xl border border-orange-200/80 bg-orange-50/70 px-4 py-3 dark:border-orange-900/45 dark:bg-orange-950/25">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-orange-950 dark:text-orange-400">Other spend</p>
-          <p className="mt-1 text-xl font-bold tabular-nums text-orange-950 dark:text-orange-100">{formatInr(miscCostsInr)}</p>
+          <p className="mt-1 text-xl font-bold tabular-nums text-orange-950 dark:text-orange-100">{shownAmount(miscCostsInr)}</p>
           <p className="mt-1 text-[10px] text-orange-950/85 dark:text-orange-300/90">Oil, consumables, sublet…</p>
         </div>
         <div className="rounded-xl border border-violet-200/80 bg-violet-50/70 px-4 py-3 dark:border-violet-900/45 dark:bg-violet-950/25">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-950 dark:text-violet-400">Profit (est.)</p>
-          <p className="mt-1 text-xl font-bold tabular-nums text-violet-950 dark:text-violet-100">{formatInr(profitInr)}</p>
+          <p className="mt-1 text-xl font-bold tabular-nums text-violet-950 dark:text-violet-100">{shownAmount(profitInr)}</p>
           <p className="mt-1 text-[10px] text-violet-950/85 dark:text-violet-300/90">Income − parts − other</p>
         </div>
       </div>
@@ -121,7 +157,7 @@ export default function WorkshopFinancePanel({
             </div>
             <div className="min-w-[10rem] flex-1 rounded-xl border border-rose-200/80 bg-rose-50/60 px-4 py-3 dark:border-rose-900/45 dark:bg-rose-950/25">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-rose-900 dark:text-rose-400">Outstanding billed</p>
-              <p className="mt-1 text-xl font-bold tabular-nums text-rose-950 dark:text-rose-100">{formatInr(paymentMetrics.outstandingInr)}</p>
+              <p className="mt-1 text-xl font-bold tabular-nums text-rose-950 dark:text-rose-100">{shownAmount(paymentMetrics.outstandingInr)}</p>
               <p className="mt-1 text-[10px] text-rose-900/85 dark:text-rose-300/90">On unpaid / partial jobs</p>
             </div>
             <div className="min-w-[10rem] flex-1 rounded-xl border border-zinc-200/80 bg-zinc-50/80 px-4 py-3 dark:border-zinc-700/80 dark:bg-zinc-900/40">

@@ -41,9 +41,9 @@ export default function AdminVehicleSummary({ vehicle, variant = "compact", clas
       className={`rounded-2xl border border-slate-200/90 bg-gradient-to-br from-white to-slate-50/90 shadow-sm dark:border-zinc-700 dark:from-zinc-900 dark:to-zinc-950/80 ${pad} ${className}`}
     >
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0 flex-1 pr-1">
           <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-zinc-500">Vehicle</p>
-          <p className="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-50">{line}</p>
+          <p className="mt-1 break-words text-sm font-semibold leading-snug text-zinc-900 dark:text-zinc-50">{line}</p>
         </div>
         <span
           className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-200/80 text-slate-700 dark:bg-zinc-800 dark:text-zinc-300"
@@ -58,22 +58,24 @@ export default function AdminVehicleSummary({ vehicle, variant = "compact", clas
           </svg>
         </span>
       </div>
-      <dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-        <div>
+      <dl className="mt-4 grid grid-cols-1 gap-x-4 gap-y-4 text-sm sm:grid-cols-2">
+        <div className="min-w-0">
           <dt className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-500">Body</dt>
-          <dd className="mt-0.5 font-medium text-zinc-900 dark:text-zinc-100">{vehicle.vehicleType || "—"}</dd>
+          <dd className="mt-1 break-words font-medium leading-snug text-zinc-900 dark:text-zinc-100">
+            {vehicle.vehicleType || "—"}
+          </dd>
         </div>
-        <div>
+        <div className="min-w-0">
           <dt className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-500">Make</dt>
-          <dd className="mt-0.5 font-medium text-zinc-900 dark:text-zinc-100">{vehicle.carMake || "—"}</dd>
+          <dd className="mt-1 break-words font-medium leading-snug text-zinc-900 dark:text-zinc-100">{vehicle.carMake || "—"}</dd>
         </div>
-        <div>
+        <div className="min-w-0 sm:col-span-2">
           <dt className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-500">Model</dt>
-          <dd className="mt-0.5 font-medium text-zinc-900 dark:text-zinc-100">{vehicle.carModel || "—"}</dd>
+          <dd className="mt-1 break-words font-medium leading-snug text-zinc-900 dark:text-zinc-100">{vehicle.carModel || "—"}</dd>
         </div>
-        <div>
+        <div className="min-w-0">
           <dt className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-500">Year</dt>
-          <dd className="mt-0.5 font-medium tabular-nums text-zinc-900 dark:text-zinc-100">
+          <dd className="mt-1 font-medium tabular-nums leading-snug text-zinc-900 dark:text-zinc-100">
             {vehicle.vehicleYear != null ? vehicle.vehicleYear : "—"}
           </dd>
         </div>

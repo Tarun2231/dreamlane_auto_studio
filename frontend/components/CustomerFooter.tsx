@@ -1,9 +1,11 @@
 import Link from "next/link";
-import { SITE_EMAIL, SITE_HOURS, SITE_LOCATION, SITE_NAME, SITE_PHONE, SITE_WHATSAPP } from "@/lib/site";
+import SiteLocationLine from "@/components/SiteLocationLine";
+import { SITE_EMAIL, SITE_HOURS, SITE_NAME, SITE_PHONE, SITE_WHATSAPP } from "@/lib/site";
 
 const footerLinks = [
   { href: "/", label: "Home" },
   { href: "/services", label: "Services" },
+  { href: "/shop", label: "Products" },
   { href: "/quote", label: "Get quote" },
   { href: "/booking", label: "Booking" },
   { href: "/booking/track", label: "Track booking" },
@@ -29,7 +31,7 @@ export default function CustomerFooter() {
               {SITE_EMAIL}
             </a>
           </p>
-          <p className="mt-1 text-xs text-gray-500 dark:text-zinc-500">{SITE_LOCATION}</p>
+          <SiteLocationLine />
           {SITE_WHATSAPP ? (
             <p className="mt-2 text-sm">
               <a

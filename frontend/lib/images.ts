@@ -6,3 +6,8 @@ export function serviceImageUrl(url?: string | null): string {
   if (!url || typeof url !== "string" || url.trim() === "") return FALLBACK_SERVICE_IMAGE;
   return url.trim();
 }
+
+/** Use with `serviceImageUrl`: absolute http(s) URLs must use `<img>` so arbitrary admin-pasted hosts work without next.config allowlists. */
+export function serviceImageIsRemoteHttp(src: string): boolean {
+  return /^https?:\/\//i.test(src.trim());
+}

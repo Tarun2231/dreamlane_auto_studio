@@ -1,5 +1,6 @@
 import Link from "next/link";
 import AddToCalendarButton from "@/components/AddToCalendarButton";
+import BookingIdCallout from "@/components/BookingIdCallout";
 import InvoiceDownloadCard from "@/components/InvoiceDownloadCard";
 import { API_BASE } from "@/lib/api";
 import { Booking } from "@/lib/types";
@@ -38,14 +39,11 @@ export default async function BookingConfirmation({
           <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Confirmed</p>
           <h1 className="mt-1 text-3xl font-bold">You&apos;re booked</h1>
           <p className="mt-2 text-gray-600 dark:text-zinc-400">
-            We sent a confirmation email if SMTP is configured on the server.
+            Save this ID — you&apos;ll need it to track your visit, download your invoice, and leave a review after service.
           </p>
         </div>
+        <BookingIdCallout bookingId={booking._id} />
         <dl className="space-y-3 border-t border-black/5 pt-6 text-sm dark:border-white/10">
-          <div className="flex flex-col gap-1 sm:flex-row sm:justify-between sm:gap-4">
-            <dt className="shrink-0 text-gray-500 dark:text-zinc-500">Booking ID</dt>
-            <dd className="break-all font-mono text-sm sm:text-right sm:text-xs">{booking._id}</dd>
-          </div>
           <div className="flex justify-between gap-4">
             <dt className="text-gray-500 dark:text-zinc-500">Service</dt>
             <dd className="font-medium">{booking.serviceId?.name}</dd>

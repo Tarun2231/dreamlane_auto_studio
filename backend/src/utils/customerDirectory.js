@@ -64,6 +64,10 @@ async function buildCustomerDirectory({ dateFrom, dateTo, q, phone } = {}) {
       chassisNumber: b.chassisNumber || "",
       registrationNumber: b.registrationNumber || "",
       finalAmount: b.finalAmount,
+      paymentMethod: b.paymentMethod || "",
+      paymentReference: b.paymentReference || "",
+      paymentReceivedYmd: b.paymentReceivedYmd || "",
+      paymentStatus: b.paymentStatus || "unpaid",
       service: serviceLite,
     };
 

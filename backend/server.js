@@ -1,3 +1,4 @@
+const path = require("path");
 const express = require("express");
 const cors = require("cors");
 const morgan = require("morgan");
@@ -52,6 +53,15 @@ app.get("/api", (_req, res) => {
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, service: "express", mongo: "see server logs" });
 });
+
+/** Local admin uploads (when Cloudinary is not configured). Served at /api/uploads/... */
+app.use(
+  "/api/uploads",
+  express.static(path.join(__dirname, "uploads", "public"), {
+    maxAge: "7d",
+    immutable: false,
+  })
+);
 
 /** Login is POST-only; browser address bar sends GET — explain instead of "Cannot GET" */
 app.get("/api/auth/admin/login", (_req, res) => {

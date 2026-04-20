@@ -18,11 +18,19 @@ export default function QuotePage() {
       </nav>
       <div className="mb-8">
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-700 dark:text-amber-500">Custom work</p>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight md:text-4xl">Request a quotation</h1>
-        <p className="mt-2 text-sm text-gray-600 dark:text-zinc-400">
+        <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+          <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Request a quotation</h1>
+          <Link
+            href="/quote/track"
+            className="shrink-0 text-sm font-semibold text-amber-800 underline decoration-amber-700/50 underline-offset-4 transition hover:text-amber-950 dark:text-amber-400 dark:decoration-amber-500/50 dark:hover:text-amber-300 sm:pt-2"
+          >
+            Track an existing quote
+          </Link>
+        </div>
+        <p className="mt-3 text-sm text-gray-600 dark:text-zinc-400">
           Choose your vehicle (same dropdowns as booking), pick a <strong>service package</strong> from our workshop list or
           &quot;Custom work&quot;, add any parts notes, and submit. We&apos;ll review and email you a quotation — then you can
-          accept it and book a slot. <strong>Get quote</strong> stays available in the site menu.
+          accept it and book a slot. Already sent a request? Use <strong>Track an existing quote</strong> with your ID and email.
         </p>
       </div>
       <QuoteRequestForm />

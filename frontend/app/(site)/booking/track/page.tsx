@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import BookingIdCallout from "@/components/BookingIdCallout";
 import InvoiceDownloadCard from "@/components/InvoiceDownloadCard";
 import { api } from "@/lib/api";
 import type { Booking } from "@/lib/types";
@@ -34,6 +35,12 @@ export default function TrackBookingPage() {
       <h1 className="mt-2 text-3xl font-bold tracking-tight md:text-4xl">Track your booking</h1>
       <p className="mt-2 text-sm text-gray-600 dark:text-zinc-400">
         Enter the booking ID from your confirmation page and the email you used when booking.
+      </p>
+      <p className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-3 py-2 text-xs leading-relaxed text-zinc-700 dark:border-amber-500/20 dark:bg-amber-500/[0.08] dark:text-zinc-300">
+        <strong className="text-zinc-900 dark:text-zinc-100">Where is my ID?</strong> After you book, the confirmation screen shows it in a gold box with a{" "}
+        <strong>Copy ID</strong> button. It&apos;s also the long code at the end of your confirmation link:{" "}
+        <span className="font-mono text-[11px] text-zinc-600 dark:text-zinc-400">/booking/confirmation/</span>
+        <span className="font-mono text-[11px] font-semibold">…your-id</span>
       </p>
 
       <form onSubmit={submit} className="card mt-8 space-y-4 p-4 sm:p-6">
@@ -69,6 +76,7 @@ export default function TrackBookingPage() {
       {booking && (
         <div className="card mt-6 space-y-4 p-4 sm:p-6">
           <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Found</p>
+          <BookingIdCallout bookingId={booking._id} compact />
           <dl className="space-y-3 text-sm">
             <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between sm:gap-4">
               <dt className="shrink-0 text-gray-500 dark:text-zinc-500">Status</dt>

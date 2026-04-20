@@ -31,22 +31,27 @@ const FAQS = [
 
 export default function FaqSection() {
   return (
-    <section className="mx-auto max-w-3xl px-4 py-14 md:py-16">
-      <h2 className="text-2xl font-bold tracking-tight md:text-3xl">FAQ</h2>
-      <p className="mt-2 text-sm text-gray-600 dark:text-zinc-400">Quick answers about booking with us.</p>
-      <div className="mt-8 space-y-3">
+    <section className="w-full">
+      <div className="mx-auto max-w-2xl text-center">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-700/90 dark:text-amber-500/80">FAQ</p>
+        <h2 className="mt-2 text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 md:text-2xl">Common questions</h2>
+        <p className="mt-2 text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">Quick answers about booking and quotes.</p>
+      </div>
+      <div className="mx-auto mt-10 max-w-3xl space-y-3">
         {FAQS.map((item) => (
           <details
             key={item.q}
-            className="group rounded-2xl border border-black/5 bg-white p-4 shadow-sm open:ring-1 open:ring-amber-500/20 dark:border-white/10 dark:bg-zinc-900/40"
+            className="group rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-sm ring-1 ring-black/[0.02] open:border-amber-500/25 open:ring-amber-500/15 dark:border-zinc-800 dark:bg-zinc-900/50 dark:ring-white/5 dark:open:border-amber-500/25"
           >
-            <summary className="cursor-pointer list-none font-semibold text-gray-900 outline-none marker:content-none dark:text-zinc-100 [&::-webkit-details-marker]:hidden">
-              <span className="flex items-start justify-between gap-2">
+            <summary className="cursor-pointer list-none font-semibold text-zinc-900 outline-none marker:content-none dark:text-zinc-100 [&::-webkit-details-marker]:hidden">
+              <span className="flex items-start justify-between gap-3 text-left">
                 {item.q}
-                <span className="text-amber-600 transition group-open:rotate-180 dark:text-amber-400">▼</span>
+                <span className="shrink-0 text-amber-600 transition group-open:rotate-180 dark:text-amber-400" aria-hidden>
+                  ▼
+                </span>
               </span>
             </summary>
-            <p className="mt-3 text-sm leading-relaxed text-gray-600 dark:text-zinc-400">{item.a}</p>
+            <p className="mt-3 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{item.a}</p>
           </details>
         ))}
       </div>

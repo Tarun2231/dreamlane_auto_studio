@@ -1,5 +1,22 @@
+export type QuoteMessage = {
+  _id?: string;
+  role: "customer" | "admin";
+  body: string;
+  attachments?: Array<{
+    kind: "image" | "pdf";
+    url: string;
+    name?: string;
+    sizeBytes?: number;
+    mimeType?: string;
+  }>;
+  createdAt?: string;
+  adminLabel?: string;
+};
+
 export type QuoteRequest = {
   _id: string;
+  /** Homepage quick form vs full Get quote flow. */
+  requestKind?: "enquiry" | "quotation";
   customerName: string;
   email: string;
   phone: string;
@@ -14,10 +31,20 @@ export type QuoteRequest = {
   /** Extra notes for a package, or full text for custom work. */
   serviceDescription: string;
   partsNotes: string;
-  status: "Submitted" | "Quoted" | "Accepted" | "Declined" | "Closed";
+  status: "Submitted" | "Pending" | "Quoted" | "Accepted" | "Declined" | "Closed";
   quotedAmount?: number;
   quoteNotes: string;
   quotedAt?: string;
+  /** Quick enquiry fields (homepage / optional). */
+  enquiryTopic?: string;
+  preferredContact?: "email" | "phone" | "either";
+  urgency?: "routine" | "soon" | "urgent";
+  messages?: QuoteMessage[];
+  lastThreadActivityAt?: string;
+  /** Present on admin list response (messages array omitted). */
+  messageCount?: number;
+  /** True when latest message came from customer. */
+  hasUnreadCustomerMessage?: boolean;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -56,7 +83,26 @@ export type CustomerHistoryBooking = {
   /** Model year (e.g. 2022). */
   vehicleYear?: number;
   finalAmount?: number;
+  paymentMethod?: string;
+  paymentReference?: string;
+  paymentReceivedYmd?: string;
+  paymentStatus?: "unpaid" | "partial" | "paid" | "waived" | string;
   service: { _id: string; name: string; followUpMonths: number | null } | null;
+};
+
+/** Job sheet / workshop record linked to a booking (admin detail). */
+export type JobCardRecord = {
+  servicesDone: string[];
+  partsUsed: string[];
+  extraCharges: number;
+  partsCostInr: number;
+  miscCostsInr: number;
+  notes: string;
+};
+
+export type AdminBookingDetailResponse = {
+  booking: Booking;
+  jobCard: JobCardRecord | null;
 };
 
 export type CustomerDirectoryEntry = {
@@ -115,11 +161,93 @@ export type AdminLoginHistoryItem = {
 /** GET /admin/quote-stats */
 export type AdminQuoteStats = {
   submitted: number;
+  pending: number;
   quoted: number;
   accepted: number;
   declined: number;
   closed: number;
   total: number;
+};
+
+export type AdminNotificationItem = {
+  id: string;
+  kind:
+    | "booking"
+    | "enquiry"
+    | "quotation"
+    | "payment"
+    | "enquiry-message"
+    | "quotation-message"
+    | string;
+  title: string;
+  message: string;
+  href: string;
+  at: string;
+};
+
+/** GET /shop-products (public) */
+export type ShopProductPublic = {
+  _id: string;
+  name: string;
+  slug: string;
+  description: string;
+  /** machine = equipment; accessory = lights, batteries, car parts; other */
+  productGroup: "machine" | "accessory" | "other";
+  category: string;
+  image: string;
+  basePrice: number;
+  discountPercent: number;
+  effectivePrice: number;
+  /** null = not tracked (unlimited); otherwise units on hand */
+  stock: number | null;
+};
+
+/** Admin shop product (GET /admin/shop-products) */
+export type ShopProductAdmin = ShopProductPublic & {
+  isActive: boolean;
+  sortOrder: number;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+/** Line on a placed shop order */
+export type ShopOrderLine = {
+  productId: string;
+  name: string;
+  productGroup?: "machine" | "accessory" | "other";
+  category: string;
+  qty: number;
+  unitPriceList: number;
+  discountPercent: number;
+  unitPriceEffective: number;
+  lineTotal: number;
+};
+
+/** GET /admin/shop-orders */
+export type ShopOrderRecord = {
+  _id: string;
+  orderNumber: string;
+  orderDateYmd: string;
+  customerName: string;
+  email: string;
+  phone: string;
+  address?: string;
+  customerNote?: string;
+  items: ShopOrderLine[];
+  subtotalListInr: number;
+  discountInr: number;
+  totalInr: number;
+  status: "pending" | "confirmed" | "fulfilled" | "cancelled";
+  createdAt?: string;
+};
+
+/** GET /admin/dashboard — product sales (order date in reporting window) */
+export type ShopSalesSnapshot = {
+  revenueInr: number;
+  ordersCount: number;
+  machinesRevenueInr: number;
+  accessoriesRevenueInr: number;
+  otherRevenueInr: number;
 };
 
 /** GET /admin/cars/history */
