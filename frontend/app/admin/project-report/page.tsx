@@ -1,13 +1,22 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Vendor = "Amazon" | "Flipkart" | "Local dealer" | "Other";
+
+type ModelVariant = {
+  model: string;
+  price: number;
+  link: string;
+};
 
 type MachineRow = {
   id: string;
   machineType: string;
   machineModel: string;
+  altMachineModel: string;
+  altMachineModelPrice: number;
+  modelVariants: ModelVariant[];
   qty: number;
   priority: "critical" | "important" | "optional";
   platform: Vendor;
@@ -23,7 +32,11 @@ type MachineRow = {
 
 type FormState = {
   machineType: string;
+  machineTypeOther: string;
   machineModel: string;
+  altMachineModel: string;
+  altMachineModelPrice: string;
+  modelVariants: Array<{ model: string; price: string; link: string }>;
   qty: string;
   priority: "critical" | "important" | "optional";
   platform: Vendor;
@@ -62,26 +75,19 @@ type ReportMeta = {
   remarks: string;
 };
 
-type ChecklistState = {
-  gstCertificate: boolean;
-  registrationProof: boolean;
-  rentAgreement: boolean;
-  ownerId: boolean;
-  supplierQuotations: boolean;
-  bankStatements: boolean;
-};
-
-type RiskRow = {
-  id: string;
-  area: string;
-  likelihood: "Low" | "Medium" | "High";
-  impact: "Low" | "Medium" | "High";
-  mitigation: string;
-};
+type UiTheme = "professional" | "midnight" | "teal";
+type WorkspaceMode = "builder" | "analysis" | "board";
 
 const emptyForm: FormState = {
   machineType: "",
+  machineTypeOther: "",
   machineModel: "",
+  altMachineModel: "",
+  altMachineModelPrice: "",
+  modelVariants: [
+    { model: "", price: "", link: "" },
+    { model: "", price: "", link: "" },
+  ],
   qty: "1",
   priority: "critical",
   platform: "Amazon",
@@ -120,22 +126,37 @@ const defaultMeta: ReportMeta = {
   remarks: "",
 };
 
-const defaultChecklist: ChecklistState = {
-  gstCertificate: false,
-  registrationProof: false,
-  rentAgreement: false,
-  ownerId: false,
-  supplierQuotations: false,
-  bankStatements: false,
-};
-
-const defaultRisks: RiskRow[] = [
-  { id: "risk-1", area: "Supplier delay", likelihood: "Medium", impact: "Medium", mitigation: "Keep alternate suppliers and buffer stock." },
-  { id: "risk-2", area: "Demand fluctuation", likelihood: "Medium", impact: "High", mitigation: "Maintain repeat-customer campaigns and service packages." },
-  { id: "risk-3", area: "Cash flow pressure", likelihood: "Low", impact: "High", mitigation: "Phase purchases and hold working-capital reserve." },
-];
-
 const STORAGE_KEY = "adminProjectReportDraftV1";
+
+const MACHINE_TYPE_OPTIONS = [
+  "AC recovery machine",
+  "Air compressor",
+  "Alignment machine",
+  "Alternator tester",
+  "Battery analyzer",
+  "Battery charger",
+  "Brake lathe machine",
+  "Car diagnostic scanner",
+  "Car washer pressure pump",
+  "Coolant flushing machine",
+  "Dent puller machine",
+  "Engine analyzer",
+  "Foam wash machine",
+  "Fuel injector cleaning machine",
+  "Hydraulic lift",
+  "Nitrogen tyre inflator",
+  "OBD scanner",
+  "Oil extractor machine",
+  "Paint booth machine",
+  "Polisher machine",
+  "Steam cleaner machine",
+  "Tyre changer machine",
+  "Tyre inflator",
+  "Wheel balancer machine",
+  "Wheel alignment lift",
+  "Welding machine",
+  "Other",
+].sort((a, b) => a.localeCompare(b));
 
 function toInr(n: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(
@@ -183,6 +204,27 @@ function rowMax(r: MachineRow) {
   return Math.max(...nums);
 }
 
+function modeVariant(
+  r: MachineRow,
+  mode: "lowest" | "highest"
+): { model: string; price: number; link: string } {
+  const variants = Array.isArray(r.modelVariants)
+    ? r.modelVariants.filter((mv) => String(mv.model || "").trim() && Number(mv.price) > 0)
+    : [];
+  if (variants.length > 0) {
+    const picked = variants.reduce((best, curr) =>
+      mode === "lowest" ? (curr.price < best.price ? curr : best) : curr.price > best.price ? curr : best
+    );
+    return { model: picked.model, price: picked.price, link: picked.link || "" };
+  }
+  const fallbackPrice = mode === "lowest" ? rowMin(r) : rowMax(r);
+  return {
+    model: String(r.machineModel || "").trim() || r.machineType,
+    price: fallbackPrice,
+    link: String(r.productUrl || "").trim(),
+  };
+}
+
 function csvLines(lines: string[][]) {
   return lines.map((line) => line.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
 }
@@ -191,6 +233,9 @@ function toMachineCsv(rows: MachineRow[]) {
   const head = [
     "Machine type",
     "Model",
+    "Alt model",
+    "Alt model price",
+    "Model options detail",
     "Qty",
     "Priority",
     "Platform",
@@ -209,6 +254,9 @@ function toMachineCsv(rows: MachineRow[]) {
   const body = rows.map((r) => [
     r.machineType,
     r.machineModel,
+    r.altMachineModel,
+    String(r.altMachineModelPrice || 0),
+    (r.modelVariants || []).map((mv) => `${mv.model}:${mv.price}:${mv.link || ""}`).join(" | "),
     String(r.qty),
     r.priority,
     r.platform,
@@ -231,10 +279,25 @@ export default function AdminProjectReportPage() {
   const [meta, setMeta] = useState<ReportMeta>(defaultMeta);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [rows, setRows] = useState<MachineRow[]>([]);
-  const [checklist, setChecklist] = useState<ChecklistState>(defaultChecklist);
-  const [risks, setRisks] = useState<RiskRow[]>(defaultRisks);
+  const [editingRowId, setEditingRowId] = useState<string | null>(null);
+  const [machineListView, setMachineListView] = useState<"all" | "lowest" | "highest">("all");
+  const [machineSearch, setMachineSearch] = useState("");
+  const [machinePriorityFilter, setMachinePriorityFilter] = useState<"all" | MachineRow["priority"]>("all");
+  const [machineSortBy, setMachineSortBy] = useState<"chosen" | "lowest" | "highest" | "gap">("chosen");
+  const [uiTheme, setUiTheme] = useState<UiTheme>("professional");
+  const [showOnlyWithLinks, setShowOnlyWithLinks] = useState(false);
+  const [compactMachineRows, setCompactMachineRows] = useState(false);
+  const [presentationMode, setPresentationMode] = useState(false);
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("builder");
+  const [scenario, setScenario] = useState({
+    capexShockPct: 0,
+    revenueShockPct: 0,
+    costShockPct: 0,
+  });
   const [msg, setMsg] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  const addMachineSectionRef = useRef<HTMLElement | null>(null);
+  const machineListSectionRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     try {
@@ -244,11 +307,32 @@ export default function AdminProjectReportPage() {
           meta?: ReportMeta;
           form?: FormState;
           rows?: MachineRow[];
-          checklist?: ChecklistState;
-          risks?: RiskRow[];
+          uiTheme?: UiTheme;
+          showOnlyWithLinks?: boolean;
+          compactMachineRows?: boolean;
+          presentationMode?: boolean;
+          workspaceMode?: WorkspaceMode;
+          scenario?: { capexShockPct?: number; revenueShockPct?: number; costShockPct?: number };
         };
         if (parsed.meta) setMeta({ ...defaultMeta, ...parsed.meta });
         if (parsed.form) setForm({ ...emptyForm, ...parsed.form });
+        if (parsed.uiTheme === "professional" || parsed.uiTheme === "midnight" || parsed.uiTheme === "teal") {
+          setUiTheme(parsed.uiTheme);
+        }
+        if (typeof parsed.showOnlyWithLinks === "boolean") setShowOnlyWithLinks(parsed.showOnlyWithLinks);
+        if (typeof parsed.compactMachineRows === "boolean") setCompactMachineRows(parsed.compactMachineRows);
+        if (typeof parsed.presentationMode === "boolean") setPresentationMode(parsed.presentationMode);
+        if (parsed.workspaceMode === "builder" || parsed.workspaceMode === "analysis" || parsed.workspaceMode === "board") {
+          setWorkspaceMode(parsed.workspaceMode);
+        }
+        if (parsed.scenario) {
+          setScenario((prev) => ({
+            ...prev,
+            capexShockPct: Number.isFinite(Number(parsed.scenario?.capexShockPct)) ? Number(parsed.scenario?.capexShockPct) : prev.capexShockPct,
+            revenueShockPct: Number.isFinite(Number(parsed.scenario?.revenueShockPct)) ? Number(parsed.scenario?.revenueShockPct) : prev.revenueShockPct,
+            costShockPct: Number.isFinite(Number(parsed.scenario?.costShockPct)) ? Number(parsed.scenario?.costShockPct) : prev.costShockPct,
+          }));
+        }
         if (Array.isArray(parsed.rows)) {
           setRows(
             parsed.rows.map((r) => ({
@@ -260,11 +344,29 @@ export default function AdminProjectReportPage() {
                   : "critical",
               productUrl: typeof r.productUrl === "string" ? r.productUrl : "",
               imageUrl: typeof r.imageUrl === "string" ? r.imageUrl : "",
+              modelVariants:
+                Array.isArray((r as { modelVariants?: unknown[] }).modelVariants) &&
+                (r as { modelVariants?: Array<{ model?: string; price?: number }> }).modelVariants!.length > 0
+                  ? (r as { modelVariants: Array<{ model?: string; price?: number; link?: string }> }).modelVariants.map((mv) => ({
+                      model: String(mv?.model || "").trim(),
+                      price: Number.isFinite(Number(mv?.price)) ? Number(mv?.price) : 0,
+                      link: String(mv?.link || "").trim(),
+                    }))
+                  : [
+                      {
+                        model: String(r.machineModel || "").trim(),
+                        price: Number.isFinite(Number(r.chosenPrice)) ? Number(r.chosenPrice) : 0,
+                        link: String(r.productUrl || "").trim(),
+                      },
+                      {
+                        model: String(r.altMachineModel || "").trim(),
+                        price: Number.isFinite(Number(r.altMachineModelPrice)) ? Number(r.altMachineModelPrice) : 0,
+                        link: "",
+                      },
+                    ].filter((mv) => mv.model || mv.price > 0 || mv.link),
             }))
           );
         }
-        if (parsed.checklist) setChecklist({ ...defaultChecklist, ...parsed.checklist });
-        if (Array.isArray(parsed.risks)) setRisks(parsed.risks);
       }
     } catch {
       // ignore corrupt draft
@@ -275,8 +377,21 @@ export default function AdminProjectReportPage() {
 
   useEffect(() => {
     if (!hydrated) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ meta, form, rows, checklist, risks }));
-  }, [meta, form, rows, checklist, risks, hydrated]);
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        meta,
+        form,
+        rows,
+        uiTheme,
+        showOnlyWithLinks,
+        compactMachineRows,
+        presentationMode,
+        workspaceMode,
+        scenario,
+      })
+    );
+  }, [meta, form, rows, uiTheme, showOnlyWithLinks, compactMachineRows, presentationMode, workspaceMode, scenario, hydrated]);
 
   const totals = useMemo(() => {
     const machineCount = rows.length;
@@ -288,6 +403,89 @@ export default function AdminProjectReportPage() {
     const priceSpread = Math.max(0, totalHighest - totalLowest);
     return { machineCount, totalUnits, totalChosen, totalLowest, totalHighest, potentialSavings, priceSpread };
   }, [rows]);
+
+  const rankedRows = useMemo(() => {
+    const valueForSort = (r: MachineRow) => {
+      if (machineSortBy === "lowest") return rowMin(r) * r.qty;
+      if (machineSortBy === "highest") return rowMax(r) * r.qty;
+      if (machineSortBy === "gap") return Math.max(0, rowMax(r) - rowMin(r)) * r.qty;
+      if (machineListView === "lowest") return rowMin(r) * r.qty;
+      if (machineListView === "highest") return rowMax(r) * r.qty;
+      return r.chosenPrice * r.qty;
+    };
+    return [...rows].sort((a, b) => valueForSort(b) - valueForSort(a));
+  }, [rows, machineListView, machineSortBy]);
+
+  const visibleMachineRows = useMemo(() => {
+    const query = machineSearch.trim().toLowerCase();
+    return rankedRows.filter((r) => {
+      const matchesPriority = machinePriorityFilter === "all" || r.priority === machinePriorityFilter;
+      const hasLink = !!(r.productUrl || (r.modelVariants || []).some((mv) => mv.link));
+      const matchesLinkFilter = !showOnlyWithLinks || hasLink;
+      const haystack = [
+        r.machineType,
+        r.platform,
+        r.location,
+        r.machineModel,
+        ...(r.modelVariants || []).map((mv) => `${mv.model} ${mv.link || ""}`),
+      ]
+        .join(" ")
+        .toLowerCase();
+      const matchesQuery = !query || haystack.includes(query);
+      return matchesPriority && matchesQuery && matchesLinkFilter;
+    });
+  }, [rankedRows, machinePriorityFilter, machineSearch, showOnlyWithLinks]);
+
+  const visibleMachineTotal = useMemo(() => {
+    return visibleMachineRows.reduce((sum, r) => {
+      if (machineListView === "highest") return sum + rowMax(r) * r.qty;
+      if (machineListView === "lowest") return sum + rowMin(r) * r.qty;
+      return sum + r.chosenPrice * r.qty;
+    }, 0);
+  }, [visibleMachineRows, machineListView]);
+
+  const machineInsights = useMemo(() => {
+    if (!rows.length) return { bestRow: null as MachineRow | null, bestSaving: 0, avgSpread: 0 };
+    let bestRow: MachineRow | null = null;
+    let bestSaving = 0;
+    let spreadSum = 0;
+    for (const r of rows) {
+      const spread = Math.max(0, rowMax(r) - rowMin(r));
+      spreadSum += spread;
+      const rowSaving = spread * Math.max(1, r.qty || 1);
+      if (rowSaving > bestSaving) {
+        bestSaving = rowSaving;
+        bestRow = r;
+      }
+    }
+    return {
+      bestRow,
+      bestSaving,
+      avgSpread: spreadSum / rows.length,
+    };
+  }, [rows]);
+
+  const themeClass = useMemo(() => {
+    if (uiTheme === "midnight") {
+      return {
+        page: "from-slate-950 to-zinc-950",
+        panel: "border-slate-700/80 bg-slate-900/70",
+        header: "from-slate-900 to-zinc-900",
+      };
+    }
+    if (uiTheme === "teal") {
+      return {
+        page: "from-teal-50 to-cyan-50 dark:from-teal-950/30 dark:to-cyan-950/20",
+        panel: "border-teal-200/70 bg-white/90 dark:border-teal-900/50 dark:bg-zinc-900/70",
+        header: "from-teal-50 to-cyan-50 dark:from-teal-950/25 dark:to-cyan-950/20",
+      };
+    }
+    return {
+      page: "from-zinc-50 to-white dark:from-zinc-950 dark:to-zinc-950",
+      panel: "border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900/70",
+      header: "from-white to-zinc-50 dark:from-zinc-900/90 dark:to-zinc-900/70",
+    };
+  }, [uiTheme]);
 
   const finance = useMemo(() => {
     const requestedLoan = toNumber(meta.requestedLoanInr);
@@ -335,12 +533,76 @@ export default function AdminProjectReportPage() {
     };
   }, [meta, totals.totalChosen]);
 
-  const checklistScore = useMemo(() => {
-    const vals = Object.values(checklist);
-    const done = vals.filter(Boolean).length;
-    const total = vals.length;
-    return { done, total, pct: total ? Math.round((done / total) * 100) : 0 };
-  }, [checklist]);
+  const fundingUi = useMemo(() => {
+    const totalFund = finance.requestedLoan + finance.ownContribution;
+    const coveragePct = finance.totalProjectCost > 0 ? Math.min(200, (totalFund / finance.totalProjectCost) * 100) : 0;
+    const emiLoadPct = finance.monthlyRevenue > 0 ? Math.min(100, (finance.emi / finance.monthlyRevenue) * 100) : 0;
+    const surplusMarginPct = finance.monthlyRevenue > 0 ? Math.max(0, (finance.monthlySurplus / finance.monthlyRevenue) * 100) : 0;
+    return {
+      coveragePct,
+      emiLoadPct,
+      surplusMarginPct,
+      totalFund,
+    };
+  }, [finance]);
+
+  const scenarioFinance = useMemo(() => {
+    const capexMultiplier = 1 + scenario.capexShockPct / 100;
+    const revenueMultiplier = 1 + scenario.revenueShockPct / 100;
+    const costMultiplier = 1 + scenario.costShockPct / 100;
+    const stressedCapex = Math.max(0, totals.totalChosen * capexMultiplier);
+    const stressedRevenue = Math.max(0, finance.monthlyRevenue * revenueMultiplier);
+    const stressedCost = Math.max(0, finance.monthlyCost * costMultiplier);
+    const stressedSurplus = Math.max(0, stressedRevenue - stressedCost);
+    const stressedFundingGap = Math.max(0, stressedCapex - (finance.requestedLoan + finance.ownContribution));
+    const stressedDscr = finance.emi > 0 ? stressedSurplus / finance.emi : 0;
+    return {
+      stressedCapex,
+      stressedRevenue,
+      stressedCost,
+      stressedSurplus,
+      stressedFundingGap,
+      stressedDscr,
+      riskLevel: stressedDscr >= 1.3 ? "Low" : stressedDscr >= 1 ? "Medium" : "High",
+    };
+  }, [scenario, totals.totalChosen, finance]);
+
+  const procurementIntel = useMemo(() => {
+    const ranked = [...rows]
+      .map((r) => ({
+        id: r.id,
+        machineType: r.machineType,
+        total: r.chosenPrice * r.qty,
+        spreadTotal: Math.max(0, rowMax(r) - rowMin(r)) * r.qty,
+        priority: r.priority,
+      }))
+      .sort((a, b) => b.total - a.total);
+    const concentrationTop3 = ranked.length
+      ? (ranked.slice(0, 3).reduce((sum, r) => sum + r.total, 0) / Math.max(1, totals.totalChosen)) * 100
+      : 0;
+    const highSpreadCount = ranked.filter((r) => r.spreadTotal > 0).length;
+    return {
+      topRows: ranked.slice(0, 5),
+      concentrationTop3,
+      highSpreadCount,
+    };
+  }, [rows, totals.totalChosen]);
+
+  const modeDetailRows = useMemo(() => {
+    if (machineListView === "all") return [];
+    return visibleMachineRows.map((r) => {
+      const selected = modeVariant(r, machineListView);
+      return {
+        id: r.id,
+        machineType: r.machineType,
+        qty: r.qty,
+        model: selected.model,
+        unit: selected.price,
+        total: selected.price * r.qty,
+        link: selected.link,
+      };
+    });
+  }, [visibleMachineRows, machineListView]);
 
   const executiveSummary = useMemo(() => {
     const topPriority = rows.filter((r) => r.priority === "critical").length;
@@ -353,61 +615,59 @@ export default function AdminProjectReportPage() {
       `Expected monthly surplus is ${toInr(finance.monthlySurplus)} and estimated EMI at ${
         finance.annualRatePct
       }% for ${finance.repaymentMonths} months is ${toInr(finance.emi)} (coverage ${finance.dscrLike.toFixed(2)}).`;
-  }, [finance, meta.workshopName, totals]);
+  }, [finance, meta.workshopName, totals, rows]);
 
-  const submission = useMemo(() => {
-    const missing: string[] = [];
-    if (!meta.workshopName.trim()) missing.push("Workshop name");
-    if (!meta.ownerName.trim()) missing.push("Owner / applicant");
-    if (!meta.location.trim()) missing.push("Project location");
-    if (!meta.bankName.trim()) missing.push("Bank name");
-    if (!meta.branch.trim()) missing.push("Bank branch");
-    if (toNumber(meta.requestedLoanInr) <= 0) missing.push("Requested loan amount");
-    if (toNumber(meta.repaymentMonths) <= 0) missing.push("Repayment tenure");
-    if (rows.length === 0) missing.push("At least one machine line item");
-    if (checklistScore.done < checklistScore.total) missing.push("Complete compliance checklist");
-    if (!meta.signatoryName.trim()) missing.push("Authorized signatory");
-    if (finance.dscrLike < 1.2) missing.push("Coverage ratio below 1.20");
-    return { ready: missing.length === 0, missing };
-  }, [meta, rows.length, checklistScore, finance.dscrLike]);
-
-  const projection = useMemo(() => {
-    const y1Revenue = finance.projectedRevenueByCapacity || finance.monthlyRevenue * 12;
-    const y1Cost = finance.monthlyCost * 12;
-    const revGrowth = toNumber(meta.projectedRevenueGrowthPct) / 100;
-    const costGrowth = toNumber(meta.projectedCostGrowthPct) / 100;
-    const y2Revenue = y1Revenue * (1 + revGrowth);
-    const y3Revenue = y2Revenue * (1 + revGrowth);
-    const y2Cost = y1Cost * (1 + costGrowth);
-    const y3Cost = y2Cost * (1 + costGrowth);
+  const formVariantSummary = useMemo(() => {
+    const variants = form.modelVariants
+      .map((mv) => ({ model: String(mv.model || "").trim(), price: toNumber(String(mv.price || "")) }))
+      .filter((mv) => mv.model && mv.price > 0);
+    const qty = Math.max(1, Math.round(toNumber(form.qty) || 1));
+    if (variants.length === 0) return null;
+    const prices = variants.map((v) => v.price);
+    const lowest = Math.min(...prices);
+    const highest = Math.max(...prices);
     return {
-      y1: { revenue: y1Revenue, cost: y1Cost, profit: y1Revenue - y1Cost },
-      y2: { revenue: y2Revenue, cost: y2Cost, profit: y2Revenue - y2Cost },
-      y3: { revenue: y3Revenue, cost: y3Cost, profit: y3Revenue - y3Cost },
+      count: variants.length,
+      lowest,
+      highest,
+      gap: Math.max(0, highest - lowest),
+      chosenTotal: lowest * qty,
     };
-  }, [finance, meta.projectedRevenueGrowthPct, meta.projectedCostGrowthPct]);
+  }, [form.modelVariants, form.qty]);
 
   const addRow = () => {
     setMsg(null);
-    const machineType = form.machineType.trim();
-    const machineModel = form.machineModel.trim();
-    const location = form.location.trim();
-    if (!machineType || !machineModel || !location) {
-      setMsg("Please fill machine type, model, and location.");
+    const machineType = (form.machineType === "Other" ? form.machineTypeOther : form.machineType).trim();
+    const location = form.location.trim() || meta.location.trim() || "Not specified";
+    const parsedVariants = form.modelVariants
+      .map((mv) => ({
+        model: String(mv.model || "").trim(),
+        price: toNumber(String(mv.price || "")),
+        link: String(mv.link || "").trim(),
+      }))
+      .filter((mv) => mv.model && mv.price > 0);
+    if (!machineType) {
+      setMsg("Please select machine type.");
       return;
     }
-    const price1 = toNumber(form.price1);
-    const price2 = toNumber(form.price2);
-    const price3 = toNumber(form.price3);
-    const chosenPrice = toNumber(form.chosenPrice);
-    if (chosenPrice <= 0) {
-      setMsg("Please enter a valid chosen/final price.");
+    if (parsedVariants.length < 1) {
+      setMsg("Add at least 1 model with price.");
       return;
     }
+    const machineModel = parsedVariants[0]?.model || "";
+    const altMachineModel = parsedVariants[1]?.model || "";
+    const altMachineModelPrice = parsedVariants[1]?.price || 0;
+    const price1 = parsedVariants[0]?.price || 0;
+    const price2 = parsedVariants[1]?.price || 0;
+    const price3 = parsedVariants[2]?.price || 0;
+    const chosenPrice = parsedVariants.reduce((min, mv) => Math.min(min, mv.price), Number.POSITIVE_INFINITY);
     const row: MachineRow = {
-      id: crypto.randomUUID(),
+      id: editingRowId || crypto.randomUUID(),
       machineType,
       machineModel,
+      altMachineModel,
+      altMachineModelPrice,
+      modelVariants: parsedVariants,
       qty: Math.max(1, Math.round(toNumber(form.qty) || 1)),
       priority: form.priority,
       platform: form.platform,
@@ -415,43 +675,102 @@ export default function AdminProjectReportPage() {
       price1,
       price2,
       price3,
-      chosenPrice,
-      productUrl: form.productUrl.trim(),
-      imageUrl: form.imageUrl.trim() || autoImageFromLink(form.platform, form.productUrl),
+      chosenPrice: Number.isFinite(chosenPrice) ? chosenPrice : 0,
+      productUrl: parsedVariants[0]?.link || form.productUrl.trim(),
+      imageUrl: form.imageUrl.trim() || autoImageFromLink(form.platform, parsedVariants[0]?.link || form.productUrl),
       notes: form.notes.trim(),
     };
-    setRows((prev) => [row, ...prev]);
+    if (editingRowId) {
+      setRows((prev) => prev.map((existing) => (existing.id === editingRowId ? row : existing)));
+    } else {
+      setRows((prev) => [row, ...prev]);
+    }
     setForm(emptyForm);
-    setMsg("Machine entry added.");
+    setEditingRowId(null);
+    setMsg(editingRowId ? "Machine entry updated." : "Machine entry added.");
   };
 
   const removeRow = (id: string) => {
     setRows((prev) => prev.filter((r) => r.id !== id));
+    if (editingRowId === id) {
+      setEditingRowId(null);
+      setForm(emptyForm);
+      setMsg("Editing cancelled because row was removed.");
+    }
+  };
+
+  const duplicateRow = (id: string) => {
+    setRows((prev) => {
+      const src = prev.find((r) => r.id === id);
+      if (!src) return prev;
+      const copy: MachineRow = {
+        ...src,
+        id: crypto.randomUUID(),
+        machineType: `${src.machineType} (copy)`,
+      };
+      return [copy, ...prev];
+    });
+    setMsg("Machine duplicated.");
+  };
+
+  const beginEditRow = (r: MachineRow) => {
+    setMachineListView("all");
+    setEditingRowId(r.id);
+    setForm({
+      ...emptyForm,
+      machineType: MACHINE_TYPE_OPTIONS.includes(r.machineType) ? r.machineType : "Other",
+      machineTypeOther: MACHINE_TYPE_OPTIONS.includes(r.machineType) ? "" : r.machineType,
+      machineModel: r.machineModel || "",
+      altMachineModel: r.altMachineModel || "",
+      altMachineModelPrice: r.altMachineModelPrice ? String(r.altMachineModelPrice) : "",
+      modelVariants:
+        Array.isArray(r.modelVariants) && r.modelVariants.length > 0
+          ? r.modelVariants.map((mv) => ({
+              model: String(mv.model || ""),
+              price: mv.price ? String(mv.price) : "",
+              link: String(mv.link || ""),
+            }))
+          : [
+              { model: r.machineModel || "", price: r.price1 ? String(r.price1) : "", link: r.productUrl || "" },
+              { model: r.altMachineModel || "", price: r.altMachineModelPrice ? String(r.altMachineModelPrice) : "", link: "" },
+            ].filter((mv) => mv.model || mv.price || mv.link),
+      qty: String(r.qty || 1),
+      priority: r.priority,
+      platform: r.platform,
+      location: r.location || "",
+      price1: r.price1 ? String(r.price1) : "",
+      price2: r.price2 ? String(r.price2) : "",
+      price3: r.price3 ? String(r.price3) : "",
+      chosenPrice: r.chosenPrice ? String(r.chosenPrice) : "",
+      productUrl: r.productUrl || "",
+      imageUrl: r.imageUrl || "",
+      notes: r.notes || "",
+    });
+    setMsg("Editing machine entry. Update and save.");
+    requestAnimationFrame(() => {
+      addMachineSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
+  const cancelEditRow = () => {
+    setEditingRowId(null);
+    setForm(emptyForm);
+    setMsg("Edit cancelled.");
+  };
+
+  const focusMachineList = (view: "lowest" | "highest") => {
+    setMachineListView(view);
+    requestAnimationFrame(() => {
+      machineListSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   };
 
   const resetReport = () => {
     setMeta(defaultMeta);
     setRows([]);
     setForm(emptyForm);
-    setChecklist(defaultChecklist);
-    setRisks(defaultRisks);
     localStorage.removeItem(STORAGE_KEY);
     setMsg("Project report reset.");
-  };
-
-  const addRisk = () => {
-    setRisks((prev) => [
-      ...prev,
-      { id: crypto.randomUUID(), area: "", likelihood: "Medium", impact: "Medium", mitigation: "" },
-    ]);
-  };
-
-  const updateRisk = (id: string, patch: Partial<RiskRow>) => {
-    setRisks((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
-  };
-
-  const removeRisk = (id: string) => {
-    setRisks((prev) => prev.filter((r) => r.id !== id));
   };
 
   const downloadBankCsv = () => {
@@ -476,7 +795,6 @@ export default function AdminProjectReportPage() {
       ["Finance", "Total Project Cost", String(finance.totalProjectCost)],
       ["Finance", "Funding Gap", String(finance.fundingGap)],
       ["Finance", "Annual Interest %", String(finance.annualRatePct)],
-      ["Compliance", "Checklist Completion", `${checklistScore.done}/${checklistScore.total} (${checklistScore.pct}%)`],
       ["Ops", "Monthly Revenue", String(finance.monthlyRevenue)],
       ["Ops", "Monthly Operating Cost", String(finance.monthlyCost)],
       ["Ops", "Monthly Surplus", String(finance.monthlySurplus)],
@@ -484,34 +802,10 @@ export default function AdminProjectReportPage() {
       ["Ops", "Estimated EMI", String(Math.round(finance.emi))],
       ["Ops", "Coverage Ratio", finance.dscrLike.toFixed(2)],
       ["Ops", "Capacity Uplift Revenue", String(Math.round(finance.upliftRevenue))],
-      ["Submission", "Readiness", submission.ready ? "Ready" : "Not Ready"],
-      ["Submission", "Missing Count", String(submission.missing.length)],
-      ["Projection", "Y1 Profit", String(Math.round(projection.y1.profit))],
-      ["Projection", "Y2 Profit", String(Math.round(projection.y2.profit))],
-      ["Projection", "Y3 Profit", String(Math.round(projection.y3.profit))],
     ]);
 
     const machineCsv = toMachineCsv(rows);
-    const checklistCsv = csvLines([
-      ["Checklist Item", "Status"],
-      ["GST certificate", checklist.gstCertificate ? "Yes" : "No"],
-      ["Business registration proof", checklist.registrationProof ? "Yes" : "No"],
-      ["Shop rent/ownership proof", checklist.rentAgreement ? "Yes" : "No"],
-      ["Owner ID proof", checklist.ownerId ? "Yes" : "No"],
-      ["Supplier quotations", checklist.supplierQuotations ? "Yes" : "No"],
-      ["Recent bank statements", checklist.bankStatements ? "Yes" : "No"],
-    ]);
-    const riskCsv = csvLines([
-      ["Risk Area", "Likelihood", "Impact", "Mitigation"],
-      ...risks.map((r) => [r.area, r.likelihood, r.impact, r.mitigation]),
-    ]);
-    const projectionCsv = csvLines([
-      ["Year", "Revenue", "Cost", "Profit"],
-      ["Year 1", String(Math.round(projection.y1.revenue)), String(Math.round(projection.y1.cost)), String(Math.round(projection.y1.profit))],
-      ["Year 2", String(Math.round(projection.y2.revenue)), String(Math.round(projection.y2.cost)), String(Math.round(projection.y2.profit))],
-      ["Year 3", String(Math.round(projection.y3.revenue)), String(Math.round(projection.y3.cost)), String(Math.round(projection.y3.profit))],
-    ]);
-    const combined = `${profile}\n\n${checklistCsv}\n\n${riskCsv}\n\n${projectionCsv}\n\n${machineCsv}\n\n${csvLines([["Remarks"], [meta.remarks || ""]])}`;
+    const combined = `${profile}\n\n${machineCsv}\n\n${csvLines([["Remarks"], [meta.remarks || ""]])}`;
     const blob = new Blob([combined], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -523,8 +817,34 @@ export default function AdminProjectReportPage() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl space-y-5 animate-[fade-in_.35s_ease-out]">
+    <div className={`mx-auto max-w-[1400px] space-y-5 rounded-3xl bg-gradient-to-b p-3 animate-[fade-in_.35s_ease-out] ${themeClass.page}`}>
       <style jsx global>{`
+        @keyframes rise-in {
+          from {
+            opacity: 0;
+            transform: translateY(6px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .ui-rise-in {
+          animation: rise-in 280ms ease-out;
+        }
+        .ui-soft-lift {
+          transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+        }
+        .ui-soft-lift:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 10px 24px -16px rgba(0, 0, 0, 0.45);
+        }
+        .ui-value-pulse {
+          transition: color 180ms ease, text-shadow 180ms ease;
+        }
+        .ui-value-pulse:hover {
+          text-shadow: 0 0 0.45rem rgba(59, 130, 246, 0.25);
+        }
         @media print {
           .no-print {
             display: none !important;
@@ -538,16 +858,33 @@ export default function AdminProjectReportPage() {
           }
         }
       `}</style>
-      <header className="print-card rounded-2xl border border-zinc-200 bg-gradient-to-br from-white to-zinc-50 p-5 shadow-sm transition hover:shadow-md dark:border-zinc-700 dark:from-zinc-900/90 dark:to-zinc-900/70">
+      <header className={`print-card ui-rise-in relative overflow-hidden rounded-3xl border bg-gradient-to-br p-6 shadow-sm transition hover:shadow-md ${themeClass.panel} ${themeClass.header}`}>
+        <div className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full bg-blue-200/30 blur-2xl dark:bg-blue-700/20" />
+        <div className="pointer-events-none absolute -bottom-8 -left-8 h-24 w-24 rounded-full bg-violet-200/30 blur-2xl dark:bg-violet-700/20" />
         <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Project report</h1>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          Bank-ready report for service-center funding: machine comparison, capital requirement, and repayment readiness.
+          Project report for service-center planning: machine comparison, capital requirement, and profitability overview.
         </p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-7">
           <InfoCard label="Total units" value={String(totals.totalUnits)} />
           <InfoCard label="Machines" value={String(totals.machineCount)} />
           <InfoCard label="Chosen CAPEX" value={toInr(totals.totalChosen)} tone="emerald" />
-          <InfoCard label="Lowest CAPEX" value={toInr(totals.totalLowest)} tone="blue" />
+          <InfoCard
+            label="Lowest CAPEX"
+            value={toInr(totals.totalLowest)}
+            tone="blue"
+            onClick={() => focusMachineList("lowest")}
+            active={machineListView === "lowest"}
+            hint={rows.length ? "Open lowest-value machines" : undefined}
+          />
+          <InfoCard
+            label="Highest CAPEX"
+            value={toInr(totals.totalHighest)}
+            tone="violet"
+            onClick={() => focusMachineList("highest")}
+            active={machineListView === "highest"}
+            hint={rows.length ? "Open highest-value machines" : undefined}
+          />
           <InfoCard label="Potential Savings" value={toInr(totals.potentialSavings)} tone="amber" />
           <InfoCard label="Monthly Surplus" value={toInr(finance.monthlySurplus)} tone="violet" />
           <InfoCard label="Coverage Ratio" value={finance.dscrLike > 0 ? finance.dscrLike.toFixed(2) : "0.00"} />
@@ -563,117 +900,190 @@ export default function AdminProjectReportPage() {
           <span className="inline-flex items-center rounded-xl border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 dark:border-blue-900/40 dark:bg-blue-950/30 dark:text-blue-300">
             Auto-save draft enabled
           </span>
+          <button
+            type="button"
+            className="rounded-xl border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+            onClick={() => addMachineSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+          >
+            Jump to add machine
+          </button>
+          <button
+            type="button"
+            className="rounded-xl border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+            onClick={() => machineListSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+          >
+            Jump to machine list
+          </button>
+          <div className="inline-flex items-center gap-1 rounded-xl border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-700 dark:bg-zinc-800/60">
+            {(["professional", "midnight", "teal"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold transition ${
+                  uiTheme === t
+                    ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                    : "text-zinc-600 hover:bg-white dark:text-zinc-300 dark:hover:bg-zinc-700"
+                }`}
+                onClick={() => setUiTheme(t)}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
         </div>
         <p className="mt-3 rounded-xl border border-zinc-200 bg-white/70 px-3 py-2 text-xs text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-300">
           <strong>Executive summary:</strong> {executiveSummary}
         </p>
-      </header>
-      <section className="print-card rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/70">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Submission readiness</h2>
-          <span
-            className={`rounded-full px-3 py-1 text-xs font-semibold ${
-              submission.ready
-                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
-                : "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
-            }`}
-          >
-            {submission.ready ? "Ready for bank submission" : "Not ready"}
-          </span>
-        </div>
-        {submission.ready ? (
-          <p className="mt-2 text-sm text-emerald-700 dark:text-emerald-300">
-            All key sections are complete and this report is ready to share.
-          </p>
-        ) : (
-          <div className="mt-2">
-            <p className="text-sm text-zinc-600 dark:text-zinc-300">Missing or needs attention:</p>
-            <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-zinc-600 dark:text-zinc-300">
-              {submission.missing.map((m) => (
-                <li key={m}>{m}</li>
-              ))}
-            </ul>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          <div className="rounded-xl border border-zinc-200 bg-white/80 px-3 py-2 text-xs text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-300">
+            <strong>Top saving opportunity:</strong>{" "}
+            {machineInsights.bestRow
+              ? `${machineInsights.bestRow.machineType} (${toInr(machineInsights.bestSaving)})`
+              : "Add machines to calculate"}
           </div>
-        )}
-      </section>
-
-      <section className="print-card rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:shadow-md dark:border-zinc-700 dark:bg-zinc-900/70">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Project profile for bank submission</h2>
-        <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">Bank template</span>
-            <select
-              className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800"
-              value={meta.bankTemplate}
-              onChange={(e) => setMeta((m) => ({ ...m, bankTemplate: e.target.value as ReportMeta["bankTemplate"] }))}
-            >
-              <option value="standard">Standard format</option>
-              <option value="sbi">SBI style</option>
-              <option value="hdfc">HDFC style</option>
-              <option value="icici">ICICI style</option>
-              <option value="nbfc">NBFC style</option>
-            </select>
-          </label>
-          <TextField label="Project title" value={meta.projectTitle} onChange={(v) => setMeta((m) => ({ ...m, projectTitle: v }))} />
-          <TextField label="Workshop name" value={meta.workshopName} onChange={(v) => setMeta((m) => ({ ...m, workshopName: v }))} />
-          <TextField label="Owner / applicant" value={meta.ownerName} onChange={(v) => setMeta((m) => ({ ...m, ownerName: v }))} />
-          <TextField label="Project location" value={meta.location} onChange={(v) => setMeta((m) => ({ ...m, location: v }))} />
-          <TextField label="Bank name" value={meta.bankName} onChange={(v) => setMeta((m) => ({ ...m, bankName: v }))} />
-          <TextField label="Branch" value={meta.branch} onChange={(v) => setMeta((m) => ({ ...m, branch: v }))} />
-          <TextField label="Purpose" value={meta.accountPurpose} onChange={(v) => setMeta((m) => ({ ...m, accountPurpose: v }))} />
-          <TextField label="Report date" type="date" value={meta.reportDate} onChange={(v) => setMeta((m) => ({ ...m, reportDate: v }))} />
-          <NumberField label="Requested loan (INR)" value={meta.requestedLoanInr} onChange={(v) => setMeta((m) => ({ ...m, requestedLoanInr: v }))} />
-          <NumberField label="Own contribution (INR)" value={meta.ownContributionInr} onChange={(v) => setMeta((m) => ({ ...m, ownContributionInr: v }))} />
-          <NumberField
-            label="Expected monthly revenue (INR)"
-            value={meta.expectedMonthlyRevenueInr}
-            onChange={(v) => setMeta((m) => ({ ...m, expectedMonthlyRevenueInr: v }))}
-          />
-          <NumberField
-            label="Expected monthly operating cost (INR)"
-            value={meta.expectedMonthlyOperatingCostInr}
-            onChange={(v) => setMeta((m) => ({ ...m, expectedMonthlyOperatingCostInr: v }))}
-          />
-          <NumberField label="Repayment tenure (months)" value={meta.repaymentMonths} onChange={(v) => setMeta((m) => ({ ...m, repaymentMonths: v }))} />
-          <NumberField label="Annual interest rate (%)" value={meta.annualInterestRate} onChange={(v) => setMeta((m) => ({ ...m, annualInterestRate: v }))} />
-          <NumberField label="Current jobs / month" value={meta.currentJobsPerMonth} onChange={(v) => setMeta((m) => ({ ...m, currentJobsPerMonth: v }))} />
-          <NumberField label="Projected jobs / month" value={meta.projectedJobsPerMonth} onChange={(v) => setMeta((m) => ({ ...m, projectedJobsPerMonth: v }))} />
-          <NumberField label="Avg ticket size (INR)" value={meta.avgTicketSizeInr} onChange={(v) => setMeta((m) => ({ ...m, avgTicketSizeInr: v }))} />
-          <NumberField label="Revenue growth % (yearly)" value={meta.projectedRevenueGrowthPct} onChange={(v) => setMeta((m) => ({ ...m, projectedRevenueGrowthPct: v }))} />
-          <NumberField label="Cost growth % (yearly)" value={meta.projectedCostGrowthPct} onChange={(v) => setMeta((m) => ({ ...m, projectedCostGrowthPct: v }))} />
-          <TextField label="Authorized signatory" value={meta.signatoryName} onChange={(v) => setMeta((m) => ({ ...m, signatoryName: v }))} />
+          <div className="rounded-xl border border-zinc-200 bg-white/80 px-3 py-2 text-xs text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-300">
+            <strong>Average price spread:</strong> {toInr(machineInsights.avgSpread)}
+          </div>
         </div>
-        <textarea
-          className="mt-3 min-h-[84px] w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800"
-          placeholder="Remarks for bank manager: collateral, business history, current throughput, expected increase after purchase..."
-          value={meta.remarks}
-          onChange={(e) => setMeta((m) => ({ ...m, remarks: e.target.value }))}
-        />
+      </header>
+
+      <section className={`no-print ui-rise-in rounded-2xl border p-3 shadow-sm ${themeClass.panel}`}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+              onClick={() => addMachineSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+            >
+              Machine input
+            </button>
+            <button
+              type="button"
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+              onClick={() => machineListSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+            >
+              Comparison schedule
+            </button>
+          </div>
+          <div className="inline-flex items-center rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-semibold text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-300">
+            Live total: {toInr(totals.totalChosen)}
+          </div>
+        </div>
+        <div className="mt-2 inline-flex rounded-xl border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-700 dark:bg-zinc-800/60">
+          {(["builder", "analysis", "board"] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              className={`rounded-lg px-3 py-1 text-xs font-semibold transition ${
+                workspaceMode === mode
+                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                  : "text-zinc-600 hover:bg-white dark:text-zinc-300 dark:hover:bg-zinc-700"
+              }`}
+              onClick={() => setWorkspaceMode(mode)}
+            >
+              {mode === "builder" ? "Builder mode" : mode === "analysis" ? "Analysis mode" : "Decision board"}
+            </button>
+          ))}
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className={`rounded-lg border px-2.5 py-1 text-xs font-semibold ${
+              showOnlyWithLinks
+                ? "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-300"
+                : "border-zinc-300 bg-white text-zinc-700 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200"
+            }`}
+            onClick={() => setShowOnlyWithLinks((v) => !v)}
+          >
+            {showOnlyWithLinks ? "Links only: ON" : "Links only: OFF"}
+          </button>
+          <button
+            type="button"
+            className={`rounded-lg border px-2.5 py-1 text-xs font-semibold ${
+              compactMachineRows
+                ? "border-violet-300 bg-violet-50 text-violet-700 dark:border-violet-900/50 dark:bg-violet-950/30 dark:text-violet-300"
+                : "border-zinc-300 bg-white text-zinc-700 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200"
+            }`}
+            onClick={() => setCompactMachineRows((v) => !v)}
+          >
+            {compactMachineRows ? "Compact rows: ON" : "Compact rows: OFF"}
+          </button>
+          <button
+            type="button"
+            className={`rounded-lg border px-2.5 py-1 text-xs font-semibold ${
+              presentationMode
+                ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300"
+                : "border-zinc-300 bg-white text-zinc-700 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200"
+            }`}
+            onClick={() => setPresentationMode((v) => !v)}
+          >
+            {presentationMode ? "Presentation: ON" : "Presentation: OFF"}
+          </button>
+        </div>
       </section>
 
-      <section className="print-card rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:shadow-md dark:border-zinc-700 dark:bg-zinc-900/70">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Compliance checklist</h2>
-          <span className="rounded-full border border-zinc-300 bg-zinc-50 px-2.5 py-1 text-xs font-semibold text-zinc-700 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200">
-            {checklistScore.done}/{checklistScore.total} complete ({checklistScore.pct}%)
+      <div className="grid gap-5 xl:grid-cols-[1.35fr_0.9fr]">
+      {!presentationMode && workspaceMode !== "analysis" ? (
+      <section ref={addMachineSectionRef} className={`print-card ui-rise-in rounded-3xl border p-5 shadow-sm transition hover:shadow-md ${themeClass.panel}`}>
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+            {editingRowId ? "Edit machine requirement" : "Add machine requirement"}
+          </h2>
+          <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[11px] font-semibold text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-300">
+            Entry workspace
           </span>
         </div>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          <ChecklistToggle label="GST certificate" checked={checklist.gstCertificate} onChange={(v) => setChecklist((c) => ({ ...c, gstCertificate: v }))} />
-          <ChecklistToggle label="Business registration proof" checked={checklist.registrationProof} onChange={(v) => setChecklist((c) => ({ ...c, registrationProof: v }))} />
-          <ChecklistToggle label="Shop rent / ownership proof" checked={checklist.rentAgreement} onChange={(v) => setChecklist((c) => ({ ...c, rentAgreement: v }))} />
-          <ChecklistToggle label="Owner ID proof" checked={checklist.ownerId} onChange={(v) => setChecklist((c) => ({ ...c, ownerId: v }))} />
-          <ChecklistToggle label="Supplier quotations" checked={checklist.supplierQuotations} onChange={(v) => setChecklist((c) => ({ ...c, supplierQuotations: v }))} />
-          <ChecklistToggle label="Recent bank statements" checked={checklist.bankStatements} onChange={(v) => setChecklist((c) => ({ ...c, bankStatements: v }))} />
+        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+          Add machine options, compare prices quickly, and keep totals synced automatically.
+        </p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <span className="inline-flex items-center rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1 text-[11px] font-semibold text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-300">
+            Quick picks
+          </span>
+          {["Air compressor", "AC recovery machine", "Battery charger", "Car diagnostic scanner"].map((preset) => (
+            <button
+              key={preset}
+              type="button"
+              className="rounded-lg border border-zinc-300 bg-white px-2 py-1 text-[11px] font-semibold text-zinc-700 hover:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+              onClick={() => setForm((f) => ({ ...f, machineType: preset, machineTypeOther: "" }))}
+            >
+              {preset}
+            </button>
+          ))}
         </div>
-      </section>
-
-      <section className="print-card rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:shadow-md dark:border-zinc-700 dark:bg-zinc-900/70">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Add machine requirement</h2>
         <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-          <input className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800" placeholder="Machine type" value={form.machineType} onChange={(e) => setForm((f) => ({ ...f, machineType: e.target.value }))} />
-          <input className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800" placeholder="Machine model" value={form.machineModel} onChange={(e) => setForm((f) => ({ ...f, machineModel: e.target.value }))} />
-          <input type="number" min={1} className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800" placeholder="Qty" value={form.qty} onChange={(e) => setForm((f) => ({ ...f, qty: e.target.value }))} />
+          <select
+            className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+            value={form.machineType}
+            onChange={(e) => setForm((f) => ({ ...f, machineType: e.target.value }))}
+          >
+            <option value="">Machine type</option>
+            {MACHINE_TYPE_OPTIONS.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
+          {form.machineType === "Other" ? (
+            <input
+              className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+              placeholder="Type machine name manually"
+              value={form.machineTypeOther}
+              onChange={(e) => setForm((f) => ({ ...f, machineTypeOther: e.target.value }))}
+            />
+          ) : (
+            <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-300">
+              Models and prices are managed below
+            </div>
+          )}
+          <input
+            type="number"
+            min={1}
+            className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+            placeholder="Qty"
+            value={form.qty}
+            onChange={(e) => setForm((f) => ({ ...f, qty: e.target.value }))}
+          />
           <select className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800" value={form.priority} onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value as FormState["priority"] }))}>
             <option value="critical">Critical</option>
             <option value="important">Important</option>
@@ -686,21 +1096,9 @@ export default function AdminProjectReportPage() {
             <option>Other</option>
           </select>
           <input className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800" placeholder="Location / seller city" value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} />
-          <input type="number" min={0} className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800" placeholder="Price option 1" value={form.price1} onChange={(e) => setForm((f) => ({ ...f, price1: e.target.value }))} />
-          <input type="number" min={0} className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800" placeholder="Price option 2" value={form.price2} onChange={(e) => setForm((f) => ({ ...f, price2: e.target.value }))} />
-          <input type="number" min={0} className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800" placeholder="Price option 3" value={form.price3} onChange={(e) => setForm((f) => ({ ...f, price3: e.target.value }))} />
-          <input type="number" min={0} className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800" placeholder="Chosen final price" value={form.chosenPrice} onChange={(e) => setForm((f) => ({ ...f, chosenPrice: e.target.value }))} />
-          <input
-            type="url"
-            className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 lg:col-span-2"
-            placeholder="Product URL (Amazon / Flipkart / supplier website)"
-            value={form.productUrl}
-            onChange={(e) => {
-              const productUrl = e.target.value;
-              const auto = autoImageFromLink(form.platform, productUrl);
-              setForm((f) => ({ ...f, productUrl, imageUrl: f.imageUrl || auto }));
-            }}
-          />
+          <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-300 lg:col-span-2">
+            Use buying link per model in the section below
+          </div>
           <input
             type="url"
             className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 lg:col-span-2"
@@ -709,33 +1107,147 @@ export default function AdminProjectReportPage() {
             onChange={(e) => setForm((f) => ({ ...f, imageUrl: e.target.value }))}
           />
         </div>
+        <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+          Total calculations are linked to model variants below. Lowest model price is used as budget-safe chosen price automatically.
+        </p>
+        <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50/60 p-3 dark:border-zinc-700 dark:bg-zinc-900/40">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-300">Same machine - different models and prices</p>
+            <button
+              type="button"
+              className="rounded-lg border border-zinc-300 bg-white px-2 py-1 text-xs font-semibold text-zinc-700 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200"
+              onClick={() =>
+                setForm((f) => ({
+                  ...f,
+                  modelVariants: [...f.modelVariants, { model: "", price: "", link: "" }],
+                }))
+              }
+            >
+              Add model
+            </button>
+          </div>
+          <div className="space-y-2">
+            {form.modelVariants.map((mv, idx) => (
+              <div key={`mv-${idx}`} className="grid gap-2 md:grid-cols-[minmax(0,1fr)_150px_minmax(0,1fr)_auto]">
+                <input
+                  className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+                  placeholder={`Model ${idx + 1} (e.g. 50 liter)`}
+                  value={mv.model}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      modelVariants: f.modelVariants.map((x, i) => (i === idx ? { ...x, model: e.target.value } : x)),
+                    }))
+                  }
+                />
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+                  placeholder={`Price for model ${idx + 1}`}
+                  value={mv.price}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      modelVariants: f.modelVariants.map((x, i) => (i === idx ? { ...x, price: e.target.value } : x)),
+                    }))
+                  }
+                />
+                <input
+                  type="url"
+                  className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+                  placeholder={`Buying link for model ${idx + 1}`}
+                  value={mv.link}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      modelVariants: f.modelVariants.map((x, i) => (i === idx ? { ...x, link: e.target.value } : x)),
+                    }))
+                  }
+                />
+                <button
+                  type="button"
+                  className="rounded-xl border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300"
+                  onClick={() =>
+                    setForm((f) => ({
+                      ...f,
+                      modelVariants: f.modelVariants.filter((_, i) => i !== idx),
+                    }))
+                  }
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+            You can remove all default rows and add your own manually. Add one or more models (example: 50L @ 15000, 100L @ 20000), then choose based on available amount.
+          </p>
+          {formVariantSummary ? (
+            <div className="mt-2 grid gap-2 sm:grid-cols-4">
+              <div className="rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-800/60">
+                Models: <span className="font-semibold">{formVariantSummary.count}</span>
+              </div>
+              <div className="rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-800/60">
+                Lowest: <span className="font-semibold">{toInr(formVariantSummary.lowest)}</span>
+              </div>
+              <div className="rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-800/60">
+                Gap: <span className="font-semibold">{toInr(formVariantSummary.gap)}</span>
+              </div>
+              <div className="rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-800/60">
+                Qty total: <span className="font-semibold">{toInr(formVariantSummary.chosenTotal)}</span>
+              </div>
+            </div>
+          ) : null}
+        </div>
         <textarea
           className="mt-3 min-h-[72px] w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800"
           placeholder="Notes: warranty, delivery timeline, why this quote selected..."
           value={form.notes}
           onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
         />
-        <div className="mt-3 flex flex-wrap gap-2">
-          <button type="button" className="rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white dark:bg-zinc-100 dark:text-zinc-900" onClick={addRow}>
-            Add machine
+        <div className="sticky bottom-2 z-10 mt-3 flex flex-wrap gap-2 rounded-xl border border-zinc-200 bg-white/90 p-2 backdrop-blur supports-[backdrop-filter]:bg-white/70 dark:border-zinc-700 dark:bg-zinc-900/80">
+          <button type="button" className="rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90 dark:bg-zinc-100 dark:text-zinc-900" onClick={addRow}>
+            {editingRowId ? "Update machine" : "Add machine"}
           </button>
-          <button type="button" className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200" onClick={downloadBankCsv}>
+          {editingRowId ? (
+            <button
+              type="button"
+              className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200"
+              onClick={cancelEditRow}
+            >
+              Cancel edit
+            </button>
+          ) : null}
+          <button type="button" className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700" onClick={downloadBankCsv}>
             Download bank report
           </button>
           <button type="button" className="rounded-xl border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-800 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-200" onClick={resetReport}>
             Reset report
           </button>
         </div>
-        {!submission.ready ? (
-          <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
-            You can download now, but complete all readiness items for stronger bank submission.
+        {msg ? (
+          <p
+            className={`mt-2 rounded-lg border px-2.5 py-1.5 text-xs ${
+              msg.toLowerCase().includes("please") || msg.toLowerCase().includes("add at least")
+                ? "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300"
+                : "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300"
+            }`}
+          >
+            {msg}
           </p>
         ) : null}
-        {msg ? <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{msg}</p> : null}
       </section>
+      ) : null}
 
-      <section className="print-card rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:shadow-md dark:border-zinc-700 dark:bg-zinc-900/70">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Funding and viability checks</h2>
+      <section className={`print-card ui-rise-in rounded-3xl border p-5 shadow-sm transition hover:shadow-md ${themeClass.panel}`}>
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Funding and viability checks</h2>
+          <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[11px] font-semibold text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-300">
+            Auto-calculated
+          </span>
+        </div>
+        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Live financial health indicators based on current machine entries.</p>
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <InfoCard label="Funding gap" value={toInr(finance.fundingGap)} tone={finance.fundingGap > 0 ? "amber" : "emerald"} />
           <InfoCard label="Estimated EMI" value={toInr(finance.emi)} />
@@ -747,129 +1259,328 @@ export default function AdminProjectReportPage() {
           <InfoCard label="Projected capacity revenue" value={toInr(finance.projectedRevenueByCapacity)} tone="violet" />
           <InfoCard label="Revenue uplift potential" value={toInr(finance.upliftRevenue)} tone="emerald" />
         </div>
+        <div className="mt-4 grid gap-2 md:grid-cols-3">
+          <MetricBar label="Funding coverage" value={`${fundingUi.coveragePct.toFixed(0)}%`} pct={Math.min(100, fundingUi.coveragePct)} tone="emerald" />
+          <MetricBar label="EMI load vs revenue" value={`${fundingUi.emiLoadPct.toFixed(0)}%`} pct={fundingUi.emiLoadPct} tone="amber" />
+          <MetricBar label="Surplus margin" value={`${fundingUi.surplusMarginPct.toFixed(0)}%`} pct={fundingUi.surplusMarginPct} tone="blue" />
+        </div>
         <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
           Coverage ratio above 1.20 is typically stronger for loan review. Current: {finance.dscrLike.toFixed(2)}.
         </p>
       </section>
+      </div>
 
-      <section className="print-card rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:shadow-md dark:border-zinc-700 dark:bg-zinc-900/70">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">3-year projection</h2>
-        <div className="mt-3 overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-700">
-          <table className="min-w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-400">
-                <th className="px-3 py-2 font-medium">Year</th>
-                <th className="px-3 py-2 font-medium">Revenue</th>
-                <th className="px-3 py-2 font-medium">Cost</th>
-                <th className="px-3 py-2 font-medium">Profit</th>
-              </tr>
-            </thead>
-            <tbody>
-              {([
-                ["Year 1", projection.y1],
-                ["Year 2", projection.y2],
-                ["Year 3", projection.y3],
-              ] as const).map(([label, row]) => (
-                <tr key={label} className="border-b border-zinc-100 dark:border-zinc-800">
-                  <td className="px-3 py-2 font-semibold">{label}</td>
-                  <td className="px-3 py-2">{toInr(row.revenue)}</td>
-                  <td className="px-3 py-2">{toInr(row.cost)}</td>
-                  <td className="px-3 py-2 font-semibold">{toInr(row.profit)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="print-card rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:shadow-md dark:border-zinc-700 dark:bg-zinc-900/70">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Risk mitigation matrix</h2>
-          <button
-            type="button"
-            className="no-print rounded-xl border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200"
-            onClick={addRisk}
-          >
-            Add risk
-          </button>
-        </div>
-        <div className="space-y-2">
-          {risks.map((r) => (
-            <div key={r.id} className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-700">
-              <div className="grid gap-2 md:grid-cols-4">
-                <input
-                  className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-800"
-                  placeholder="Risk area"
-                  value={r.area}
-                  onChange={(e) => updateRisk(r.id, { area: e.target.value })}
-                />
-                <select
-                  className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-800"
-                  value={r.likelihood}
-                  onChange={(e) => updateRisk(r.id, { likelihood: e.target.value as RiskRow["likelihood"] })}
-                >
-                  <option>Low</option>
-                  <option>Medium</option>
-                  <option>High</option>
-                </select>
-                <select
-                  className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-800"
-                  value={r.impact}
-                  onChange={(e) => updateRisk(r.id, { impact: e.target.value as RiskRow["impact"] })}
-                >
-                  <option>Low</option>
-                  <option>Medium</option>
-                  <option>High</option>
-                </select>
-                <button
-                  type="button"
-                  className="no-print rounded-lg border border-rose-300 bg-rose-50 px-2 py-1.5 text-xs font-semibold text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300"
-                  onClick={() => removeRisk(r.id)}
-                >
-                  Remove
-                </button>
-              </div>
-              <textarea
-                className="mt-2 min-h-[54px] w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-800"
-                placeholder="Mitigation plan"
-                value={r.mitigation}
-                onChange={(e) => updateRisk(r.id, { mitigation: e.target.value })}
-              />
+      {workspaceMode !== "builder" ? (
+        <section className={`print-card ui-rise-in rounded-3xl border p-5 shadow-sm transition hover:shadow-md ${themeClass.panel}`}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Scenario Lab (stress test)</h2>
+            <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[11px] font-semibold text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-300">
+              What-if simulation
+            </span>
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-3">
+            <label className="rounded-xl border border-zinc-200 bg-white p-3 text-xs dark:border-zinc-700 dark:bg-zinc-900/50">
+              <p className="font-semibold text-zinc-700 dark:text-zinc-200">CAPEX shock %</p>
+              <input type="range" min={-20} max={40} value={scenario.capexShockPct} onChange={(e) => setScenario((s) => ({ ...s, capexShockPct: Number(e.target.value) }))} className="mt-2 w-full" />
+              <p className="mt-1 text-zinc-500 dark:text-zinc-400">{scenario.capexShockPct}%</p>
+            </label>
+            <label className="rounded-xl border border-zinc-200 bg-white p-3 text-xs dark:border-zinc-700 dark:bg-zinc-900/50">
+              <p className="font-semibold text-zinc-700 dark:text-zinc-200">Revenue shock %</p>
+              <input type="range" min={-40} max={40} value={scenario.revenueShockPct} onChange={(e) => setScenario((s) => ({ ...s, revenueShockPct: Number(e.target.value) }))} className="mt-2 w-full" />
+              <p className="mt-1 text-zinc-500 dark:text-zinc-400">{scenario.revenueShockPct}%</p>
+            </label>
+            <label className="rounded-xl border border-zinc-200 bg-white p-3 text-xs dark:border-zinc-700 dark:bg-zinc-900/50">
+              <p className="font-semibold text-zinc-700 dark:text-zinc-200">Cost shock %</p>
+              <input type="range" min={-20} max={50} value={scenario.costShockPct} onChange={(e) => setScenario((s) => ({ ...s, costShockPct: Number(e.target.value) }))} className="mt-2 w-full" />
+              <p className="mt-1 text-zinc-500 dark:text-zinc-400">{scenario.costShockPct}%</p>
+            </label>
+          </div>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <InfoCard label="Stressed CAPEX" value={toInr(scenarioFinance.stressedCapex)} tone="amber" />
+            <InfoCard label="Stressed surplus" value={toInr(scenarioFinance.stressedSurplus)} tone="blue" />
+            <InfoCard label="Stressed DSCR" value={scenarioFinance.stressedDscr.toFixed(2)} tone={scenarioFinance.stressedDscr >= 1.2 ? "emerald" : "amber"} />
+            <InfoCard label="Risk band" value={scenarioFinance.riskLevel} tone={scenarioFinance.riskLevel === "Low" ? "emerald" : "amber"} />
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div className="rounded-xl border border-zinc-200 bg-white p-3 text-xs dark:border-zinc-700 dark:bg-zinc-900/50">
+              <p className="font-semibold text-zinc-700 dark:text-zinc-200">Funding gap under stress</p>
+              <p className="mt-1 text-lg font-bold text-zinc-900 dark:text-zinc-100">{toInr(scenarioFinance.stressedFundingGap)}</p>
             </div>
+            <div className="rounded-xl border border-zinc-200 bg-white p-3 text-xs dark:border-zinc-700 dark:bg-zinc-900/50">
+              <p className="font-semibold text-zinc-700 dark:text-zinc-200">Procurement concentration (Top 3)</p>
+              <p className="mt-1 text-lg font-bold text-zinc-900 dark:text-zinc-100">{procurementIntel.concentrationTop3.toFixed(0)}%</p>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {workspaceMode === "board" ? (
+        <section className={`print-card ui-rise-in rounded-3xl border p-5 shadow-sm transition hover:shadow-md ${themeClass.panel}`}>
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Procurement intelligence board</h2>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            {procurementIntel.topRows.map((r, idx) => (
+              <div key={`${r.id}-intel`} className="rounded-xl border border-zinc-200 bg-white p-3 text-xs dark:border-zinc-700 dark:bg-zinc-900/50">
+                <p className="font-semibold text-zinc-800 dark:text-zinc-100">
+                  #{idx + 1} {r.machineType}
+                </p>
+                <p className="mt-1 text-zinc-600 dark:text-zinc-300">Chosen outlay: {toInr(r.total)}</p>
+                <p className="text-zinc-600 dark:text-zinc-300">Potential optimization: {toInr(r.spreadTotal)}</p>
+                <p className="text-zinc-500 dark:text-zinc-400">Priority: {r.priority}</p>
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
+            High spread items: {procurementIntel.highSpreadCount}. Prioritize negotiation on rows with high optimization value.
+          </p>
+        </section>
+      ) : null}
+
+      <section ref={machineListSectionRef} className={`print-card ui-rise-in rounded-3xl border p-5 shadow-sm transition hover:shadow-md ${themeClass.panel}`}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Machine comparison schedule</h2>
+          <div className="flex flex-wrap items-center gap-2">
+            {machineListView !== "all" ? (
+              <button
+                type="button"
+                className="rounded-lg border border-zinc-300 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-700 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200"
+                onClick={() => setMachineListView("all")}
+              >
+                Show all machines
+              </button>
+            ) : null}
+            {(machineSearch || machinePriorityFilter !== "all") ? (
+              <button
+                type="button"
+                className="rounded-lg border border-zinc-300 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-700 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200"
+                onClick={() => {
+                  setMachineSearch("");
+                  setMachinePriorityFilter("all");
+                }}
+              >
+                Clear filters
+              </button>
+            ) : null}
+          </div>
+        </div>
+        <div className="mt-2 inline-flex rounded-xl border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-700 dark:bg-zinc-800/60">
+          {(["all", "lowest", "highest"] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              className={`rounded-lg px-3 py-1 text-xs font-semibold transition ${
+                machineListView === mode
+                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                  : "text-zinc-600 hover:bg-white dark:text-zinc-300 dark:hover:bg-zinc-700"
+              }`}
+              onClick={() => setMachineListView(mode)}
+            >
+              {mode === "all" ? "Chosen view" : mode === "lowest" ? "Lowest view" : "Highest view"}
+            </button>
           ))}
         </div>
-      </section>
-
-      <section className="print-card rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:shadow-md dark:border-zinc-700 dark:bg-zinc-900/70">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Machine comparison schedule</h2>
+        {machineListView !== "all" ? (
+          <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+            Showing {machineListView} value for each machine.
+          </p>
+        ) : null}
+        <div className="mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_180px_170px_auto]">
+          <input
+            type="text"
+            className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+            placeholder="Search machine, model, platform, location..."
+            value={machineSearch}
+            onChange={(e) => setMachineSearch(e.target.value)}
+          />
+          <select
+            className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+            value={machinePriorityFilter}
+            onChange={(e) => setMachinePriorityFilter(e.target.value as "all" | MachineRow["priority"])}
+          >
+            <option value="all">All priorities</option>
+            <option value="critical">Critical</option>
+            <option value="important">Important</option>
+            <option value="optional">Optional</option>
+          </select>
+          <select
+            className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+            value={machineSortBy}
+            onChange={(e) => setMachineSortBy(e.target.value as "chosen" | "lowest" | "highest" | "gap")}
+          >
+            <option value="chosen">Sort: chosen</option>
+            <option value="lowest">Sort: lowest</option>
+            <option value="highest">Sort: highest</option>
+            <option value="gap">Sort: gap</option>
+          </select>
+          <div className="inline-flex items-center rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs font-semibold text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-300">
+            Showing {visibleMachineRows.length} / {rows.length} · {toInr(visibleMachineTotal)}
+          </div>
+        </div>
         {rows.length === 0 ? (
           <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">No machines added yet.</p>
         ) : (
-          <div className="mt-3 overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-700">
+          <>
+          <div className="mt-3 space-y-3 md:hidden">
+            {visibleMachineRows.length === 0 ? (
+              <div className="rounded-xl border border-zinc-200 bg-white px-3 py-6 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-400">
+                No machines match current filters.
+              </div>
+            ) : (
+              visibleMachineRows.map((r, idx) => (
+                <div
+                  key={`${r.id}-mobile`}
+                  className={`ui-soft-lift rounded-xl border border-zinc-200 bg-white ${compactMachineRows ? "p-2.5" : "p-3"} shadow-sm dark:border-zinc-700 dark:bg-zinc-900/60 ${
+                    editingRowId === r.id ? "ring-2 ring-blue-400/40" : ""
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">#{idx + 1}</p>
+                      <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{r.machineType}</p>
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400">{r.platform} · {r.location}</p>
+                    </div>
+                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                      r.priority === "critical"
+                        ? "bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300"
+                        : r.priority === "important"
+                        ? "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
+                        : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                    }`}>
+                      {r.priority}
+                    </span>
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                    <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1 dark:border-zinc-700 dark:bg-zinc-800/60">
+                      <p className="text-zinc-500 dark:text-zinc-400">Qty</p>
+                      <p className="font-semibold">{r.qty}</p>
+                    </div>
+                    <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1 dark:border-zinc-700 dark:bg-zinc-800/60">
+                      <p className="text-zinc-500 dark:text-zinc-400">{machineListView === "all" ? "Chosen" : machineListView === "highest" ? "Highest total" : "Lowest total"}</p>
+                      <p className="ui-value-pulse font-semibold">
+                        {machineListView === "highest"
+                          ? toInr(rowMax(r) * r.qty)
+                          : machineListView === "lowest"
+                          ? toInr(rowMin(r) * r.qty)
+                          : toInr(r.chosenPrice * r.qty)}
+                      </p>
+                    </div>
+                    {machineListView !== "highest" ? (
+                      <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1 text-emerald-700 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-emerald-300">
+                        <p className="text-zinc-500 dark:text-zinc-400">Lowest</p>
+                        <p className="font-semibold">{toInr(rowMin(r))}</p>
+                      </div>
+                    ) : null}
+                    {machineListView !== "lowest" ? (
+                      <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1 text-violet-700 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-violet-300">
+                        <p className="text-zinc-500 dark:text-zinc-400">Highest</p>
+                        <p className="font-semibold">{toInr(rowMax(r))}</p>
+                      </div>
+                    ) : null}
+                  </div>
+                  {machineListView !== "all" ? (
+                    <div className="mt-2 rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800/60">
+                      <p className="text-zinc-500 dark:text-zinc-400">
+                        {machineListView === "lowest" ? "Lowest model" : "Highest model"}
+                      </p>
+                      <p className="font-semibold text-zinc-800 dark:text-zinc-100">
+                        {modeVariant(r, machineListView).model} - {toInr(modeVariant(r, machineListView).price)}
+                      </p>
+                    </div>
+                  ) : null}
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {!presentationMode ? (
+                      <>
+                        <button
+                          type="button"
+                          className="rounded-lg border border-blue-300 px-2 py-1 text-xs font-semibold text-blue-700 dark:border-blue-900/60 dark:text-blue-300"
+                          onClick={() => beginEditRow(r)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-lg border border-zinc-300 px-2 py-1 text-xs font-semibold text-zinc-700 dark:border-zinc-600 dark:text-zinc-200"
+                          onClick={() => duplicateRow(r.id)}
+                        >
+                          Duplicate
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-lg border border-rose-300 px-2 py-1 text-xs font-semibold text-rose-700 dark:border-rose-900/60 dark:text-rose-300"
+                          onClick={() => removeRow(r.id)}
+                        >
+                          Remove
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+          <div className="mt-3 hidden overflow-x-auto rounded-xl border border-zinc-200 md:block dark:border-zinc-700">
             <table className="min-w-full text-left text-sm bg-white dark:bg-zinc-900/60">
               <thead>
-                <tr className="border-b border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-400">
+                <tr className="sticky top-0 z-10 border-b border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800/90 dark:text-zinc-400">
+                  <th className="px-2 py-2 font-medium">#</th>
                   <th className="px-2 py-2 font-medium">Type</th>
-                  <th className="px-2 py-2 font-medium">Model</th>
+                  <th className="px-2 py-2 font-medium">Model options</th>
                   <th className="px-2 py-2 font-medium">Qty</th>
                   <th className="px-2 py-2 font-medium">Priority</th>
                   <th className="px-2 py-2 font-medium">Image</th>
                   <th className="px-2 py-2 font-medium">Platform</th>
                   <th className="px-2 py-2 font-medium">Location</th>
                   <th className="px-2 py-2 font-medium">Product link</th>
-                  <th className="px-2 py-2 font-medium">Compared (1 / 2 / 3)</th>
-                  <th className="px-2 py-2 font-medium">Lowest</th>
-                  <th className="px-2 py-2 font-medium">Highest</th>
-                  <th className="px-2 py-2 font-medium">Gap</th>
-                  <th className="px-2 py-2 font-medium">Chosen</th>
-                  <th className="px-2 py-2 font-medium">Action</th>
+                  {machineListView === "all" ? <th className="px-2 py-2 font-medium">Compared (1 / 2 / 3)</th> : null}
+                  {machineListView !== "highest" ? <th className="px-2 py-2 font-medium">Lowest</th> : null}
+                  {machineListView !== "lowest" ? <th className="px-2 py-2 font-medium">Highest</th> : null}
+                  {machineListView === "all" ? <th className="px-2 py-2 font-medium">Gap</th> : null}
+                  <th className="px-2 py-2 font-medium">
+                    {machineListView === "all" ? "Chosen" : machineListView === "highest" ? "Highest total" : "Lowest total"}
+                  </th>
+                  {!presentationMode ? <th className="px-2 py-2 font-medium">Action</th> : null}
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
-                  <tr key={r.id} className="border-b border-zinc-100 dark:border-zinc-800">
-                    <td className="px-2 py-2">{r.machineType}</td>
-                    <td className="px-2 py-2">{r.machineModel}</td>
+                {visibleMachineRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={15} className="px-3 py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">
+                      No machines match current filters.
+                    </td>
+                  </tr>
+                ) : (
+                  visibleMachineRows.map((r, idx) => (
+                  <tr key={r.id} className={`ui-soft-lift border-b border-zinc-100 dark:border-zinc-800 ${compactMachineRows ? "align-top" : ""} ${idx % 2 === 1 ? "bg-zinc-50/40 dark:bg-zinc-900/20" : ""} ${editingRowId === r.id ? "bg-blue-50/60 dark:bg-blue-950/20" : ""}`}>
+                    <td className="px-2 py-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">{idx + 1}</td>
+                    <td className="px-2 py-2">
+                      <p className="font-semibold text-zinc-900 dark:text-zinc-100">{r.machineType}</p>
+                      <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{r.platform}</p>
+                    </td>
+                    <td className="px-2 py-2">
+                      {machineListView !== "all" ? (
+                        <div className="rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800/60">
+                          <span className="font-medium">{modeVariant(r, machineListView).model}</span> - {toInr(modeVariant(r, machineListView).price)}
+                        </div>
+                      ) : Array.isArray(r.modelVariants) && r.modelVariants.length > 0 ? (
+                        <div className="space-y-1">
+                          {r.modelVariants.map((mv, idx) => (
+                            <div key={`${r.id}-mv-${idx}`} className="rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800/60">
+                              <span className="font-medium">{mv.model}</span> - {toInr(mv.price)}
+                              {mv.link ? (
+                                <>
+                                  {" "}
+                                  ·{" "}
+                                  <a href={mv.link} target="_blank" rel="noreferrer" className="font-semibold text-blue-700 hover:underline dark:text-blue-400">
+                                    Buy
+                                  </a>
+                                </>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-zinc-500">{r.machineModel || "—"}</span>
+                      )}
+                    </td>
                     <td className="px-2 py-2">{r.qty}</td>
                     <td className="px-2 py-2">
                       <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
@@ -901,40 +1612,88 @@ export default function AdminProjectReportPage() {
                         <span className="text-xs text-zinc-400">—</span>
                       )}
                     </td>
-                    <td className="px-2 py-2">
-                      {toInr(r.price1)} / {toInr(r.price2)} / {toInr(r.price3)}
+                    {machineListView === "all" ? (
+                      <td className="px-2 py-2">
+                        <div className="space-y-0.5 text-xs">
+                          <p>{toInr(r.price1)}</p>
+                          <p>{toInr(r.price2)}</p>
+                          <p>{toInr(r.price3)}</p>
+                        </div>
+                      </td>
+                    ) : null}
+                    {machineListView !== "highest" ? (
+                      <td className={`ui-value-pulse px-2 py-2 text-emerald-700 dark:text-emerald-300 ${machineListView === "lowest" ? "font-bold underline decoration-emerald-400/70 underline-offset-2" : ""}`}>
+                        {toInr(rowMin(r))}
+                      </td>
+                    ) : null}
+                    {machineListView !== "lowest" ? (
+                      <td className={`ui-value-pulse px-2 py-2 text-violet-700 dark:text-violet-300 ${machineListView === "highest" ? "font-bold underline decoration-violet-400/70 underline-offset-2" : ""}`}>
+                        {toInr(rowMax(r))}
+                      </td>
+                    ) : null}
+                    {machineListView === "all" ? (
+                      <td className="ui-value-pulse px-2 py-2 font-medium text-amber-700 dark:text-amber-300">{toInr(Math.max(0, rowMax(r) - rowMin(r)))}</td>
+                    ) : null}
+                    <td className="ui-value-pulse px-2 py-2 font-semibold">
+                      {machineListView === "highest"
+                        ? toInr(rowMax(r) * r.qty)
+                        : machineListView === "lowest"
+                        ? toInr(rowMin(r) * r.qty)
+                        : toInr(r.chosenPrice * r.qty)}
                     </td>
-                    <td className="px-2 py-2 text-emerald-700 dark:text-emerald-300">{toInr(rowMin(r))}</td>
-                    <td className="px-2 py-2 text-violet-700 dark:text-violet-300">{toInr(rowMax(r))}</td>
-                    <td className="px-2 py-2 font-medium text-amber-700 dark:text-amber-300">{toInr(Math.max(0, rowMax(r) - rowMin(r)))}</td>
-                    <td className="px-2 py-2 font-semibold">{toInr(r.chosenPrice * r.qty)}</td>
-                    <td className="px-2 py-2">
-                      <button type="button" className="rounded-lg border border-rose-300 px-2 py-1 text-xs font-semibold text-rose-700 dark:border-rose-900/60 dark:text-rose-300" onClick={() => removeRow(r.id)}>
-                        Remove
-                      </button>
-                    </td>
+                    {!presentationMode ? (
+                      <td className="px-2 py-2">
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            className="rounded-lg border border-blue-300 px-2 py-1 text-xs font-semibold text-blue-700 dark:border-blue-900/60 dark:text-blue-300"
+                            onClick={() => beginEditRow(r)}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded-lg border border-zinc-300 px-2 py-1 text-xs font-semibold text-zinc-700 dark:border-zinc-600 dark:text-zinc-200"
+                            onClick={() => duplicateRow(r.id)}
+                          >
+                            Duplicate
+                          </button>
+                          <button type="button" className="rounded-lg border border-rose-300 px-2 py-1 text-xs font-semibold text-rose-700 dark:border-rose-900/60 dark:text-rose-300" onClick={() => removeRow(r.id)}>
+                            Remove
+                          </button>
+                        </div>
+                      </td>
+                    ) : null}
                   </tr>
-                ))}
+                  ))
+                )}
               </tbody>
             </table>
           </div>
+          {machineListView !== "all" ? (
+            <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50/70 p-3 dark:border-zinc-700 dark:bg-zinc-900/50">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-300">
+                  {machineListView === "lowest" ? "Lowest selection summary" : "Highest selection summary"}
+                </p>
+                <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                  Total: {toInr(modeDetailRows.reduce((sum, r) => sum + r.total, 0))}
+                </p>
+              </div>
+              <div className="mt-2 grid gap-2 md:grid-cols-2">
+                {modeDetailRows.map((r) => (
+                  <div key={`${r.id}-${machineListView}`} className="rounded-lg border border-zinc-200 bg-white px-2.5 py-2 text-xs dark:border-zinc-700 dark:bg-zinc-800/70">
+                    <p className="font-semibold text-zinc-800 dark:text-zinc-100">{r.machineType}</p>
+                    <p className="mt-0.5 text-zinc-600 dark:text-zinc-300">
+                      {r.model} · {toInr(r.unit)} x {r.qty} = <span className="font-semibold">{toInr(r.total)}</span>
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          </>
         )}
-      </section>
-      <section className="print-card rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/70">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Declaration</h2>
-        <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">
-          I hereby confirm that this project report and machine pricing details are true to the best of my knowledge and are prepared for bank funding assessment for service-center business expansion.
-        </p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800/60">
-            <p className="text-[11px] uppercase tracking-wide text-zinc-500">Authorized signatory</p>
-            <p className="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{meta.signatoryName || "—"}</p>
-          </div>
-          <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800/60">
-            <p className="text-[11px] uppercase tracking-wide text-zinc-500">Date</p>
-            <p className="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{meta.reportDate || "—"}</p>
-          </div>
-        </div>
       </section>
     </div>
   );
@@ -944,10 +1703,16 @@ function InfoCard({
   label,
   value,
   tone = "default",
+  onClick,
+  active = false,
+  hint,
 }: {
   label: string;
   value: string;
   tone?: "default" | "emerald" | "blue" | "violet" | "amber";
+  onClick?: () => void;
+  active?: boolean;
+  hint?: string;
 }) {
   const tones: Record<string, string> = {
     default: "border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800/60",
@@ -957,51 +1722,19 @@ function InfoCard({
     amber: "border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/30",
   };
   return (
-    <div className={`rounded-xl border p-3 ${tones[tone] || tones.default}`}>
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!onClick}
+      title={hint}
+      className={`rounded-2xl border p-3 text-left transition ${tones[tone] || tones.default} ${
+        onClick ? "cursor-pointer hover:shadow-sm" : "cursor-default"
+      } ${active ? "ring-2 ring-zinc-400/50 dark:ring-zinc-500/60" : ""} ui-soft-lift`}
+    >
       <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
       <p className="mt-1 text-xl font-bold text-zinc-900 dark:text-zinc-100">{value}</p>
-    </div>
-  );
-}
-
-function ChecklistToggle({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <label className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="h-4 w-4 rounded border-zinc-400" />
-      {label}
-    </label>
-  );
-}
-
-function TextField({
-  label,
-  value,
-  onChange,
-  type = "text",
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  type?: "text" | "date";
-}) {
-  return (
-    <label className="block">
-      <span className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">{label}</span>
-      <input
-        type={type}
-        className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
-    </label>
+      {hint ? <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">{hint}</p> : null}
+    </button>
   );
 }
 
@@ -1025,5 +1758,30 @@ function NumberField({
         onChange={(e) => onChange(e.target.value)}
       />
     </label>
+  );
+}
+
+function MetricBar({
+  label,
+  value,
+  pct,
+  tone = "blue",
+}: {
+  label: string;
+  value: string;
+  pct: number;
+  tone?: "emerald" | "amber" | "blue";
+}) {
+  const track = tone === "emerald" ? "bg-emerald-500" : tone === "amber" ? "bg-amber-500" : "bg-blue-500";
+  return (
+    <div className="rounded-xl border border-zinc-200 bg-white p-2.5 dark:border-zinc-700 dark:bg-zinc-900/50">
+      <div className="flex items-center justify-between gap-2 text-xs">
+        <p className="font-semibold text-zinc-700 dark:text-zinc-200">{label}</p>
+        <p className="font-semibold text-zinc-600 dark:text-zinc-300">{value}</p>
+      </div>
+      <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+        <div className={`h-full ${track}`} style={{ width: `${Math.max(0, Math.min(100, pct))}%` }} />
+      </div>
+    </div>
   );
 }

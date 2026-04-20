@@ -185,7 +185,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const isLoginPage = pathname === "/admin/login";
   const [mounted, setMounted] = useState(false);
-  const [token, setToken] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null | undefined>(undefined);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
@@ -195,7 +195,11 @@ export default function AdminShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!mounted) return;
-    setToken(localStorage.getItem("adminToken"));
+    try {
+      setToken(localStorage.getItem("adminToken"));
+    } catch {
+      setToken(null);
+    }
   }, [mounted, pathname]);
 
   useEffect(() => {
@@ -204,7 +208,13 @@ export default function AdminShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!mounted || isLoginPage) return;
-    if (!localStorage.getItem("adminToken")) {
+    let currentToken = "";
+    try {
+      currentToken = localStorage.getItem("adminToken") || "";
+    } catch {
+      currentToken = "";
+    }
+    if (!currentToken) {
       router.replace("/admin/login");
     }
   }, [mounted, isLoginPage, router]);
@@ -232,8 +242,22 @@ export default function AdminShell({ children }: { children: ReactNode }) {
     return <AdminGateLoading />;
   }
 
-  if (!token) {
+  if (token === undefined) {
     return <AdminGateLoading />;
+  }
+
+  if (!token) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-100 px-4 text-center dark:bg-zinc-950">
+        <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Session missing or expired.</p>
+        <Link
+          href="/admin/login"
+          className="mt-3 inline-flex rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white dark:bg-zinc-100 dark:text-zinc-900"
+        >
+          Go to admin login
+        </Link>
+      </div>
+    );
   }
 
   return (
