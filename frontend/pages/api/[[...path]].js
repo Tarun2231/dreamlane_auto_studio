@@ -4,6 +4,10 @@ const runtimeRequire = eval("require");
 const moduleLib = require("module");
 const repoRoot = path.join(process.cwd(), "..");
 const dotenv = require("dotenv");
+// Keep these static imports so Turbopack traces backend runtime deps into the serverless bundle.
+require("express");
+require("cors");
+require("morgan");
 
 const frontendNodeModules = path.join(process.cwd(), "node_modules");
 const parentNodeModules = path.join(process.cwd(), "..", "node_modules");
