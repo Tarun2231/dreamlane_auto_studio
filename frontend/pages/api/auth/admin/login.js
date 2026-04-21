@@ -1,18 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-const path = require("path");
+const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const connectMongo = require("../../../../lib/mongodbMongoose");
-const runtimeRequire = eval("require");
-
-const repoRoot = path.join(process.cwd(), "..");
-function requireShared(modulePathInRepo, modulePathInPackage) {
-  try {
-    return runtimeRequire(modulePathInPackage);
-  } catch {
-    return runtimeRequire(path.join(repoRoot, modulePathInRepo));
-  }
-}
-const User = requireShared("backend/src/models/User", "car-service-business/backend/src/models/User");
+const clientPromise = require("../../../../lib/mongodb");
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
@@ -29,13 +18,15 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ message: "Email and password are required" });
     }
 
-    await connectMongo();
-    const admin = await User.findOne({ email: String(email).trim(), role: "admin" });
+    const client = await clientPromise;
+    const dbName = process.env.MONGO_DB_NAME || "car-service";
+    const db = client.db(dbName);
+    const admin = await db.collection("users").findOne({ email: String(email).trim(), role: "admin" });
     if (!admin) {
       return res.status(401).json({ message: "Invalid email or password" });
     }
 
-    const isMatch = await admin.comparePassword(password);
+    const isMatch = await bcrypt.compare(password, admin.password || "");
     if (!isMatch) {
       return res.status(401).json({ message: "Invalid email or password" });
     }
