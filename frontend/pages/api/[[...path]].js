@@ -14,7 +14,7 @@ function requireShared(modulePathInRepo, modulePathInPackage) {
   }
 }
 
-const connectMongo = requireShared("lib/mongodb", "car-service-business/lib/mongodb");
+const connectMongo = require("../../lib/mongodb");
 const app = requireShared("backend/src/app", "car-service-business/backend/src/app");
 const { startServiceReminderCron } = requireShared(
   "backend/src/jobs/serviceReminders",

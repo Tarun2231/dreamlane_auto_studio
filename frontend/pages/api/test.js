@@ -11,7 +11,7 @@ function requireShared(modulePathInRepo, modulePathInPackage) {
   }
 }
 
-const connectMongo = requireShared("lib/mongodb", "car-service-business/lib/mongodb");
+const connectMongo = require("../../lib/mongodb");
 const mongoose = runtimeRequire("mongoose");
 
 module.exports = async function handler(_req, res) {
