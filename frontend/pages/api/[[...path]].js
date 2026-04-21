@@ -6,9 +6,12 @@ const repoRoot = path.join(process.cwd(), "..");
 const dotenv = require("dotenv");
 
 const frontendNodeModules = path.join(process.cwd(), "node_modules");
+const parentNodeModules = path.join(process.cwd(), "..", "node_modules");
+const fallbackNodeModules = [frontendNodeModules, parentNodeModules];
+const fallbackNodePath = fallbackNodeModules.join(path.delimiter);
 process.env.NODE_PATH = process.env.NODE_PATH
-  ? `${frontendNodeModules}${path.delimiter}${process.env.NODE_PATH}`
-  : frontendNodeModules;
+  ? `${fallbackNodePath}${path.delimiter}${process.env.NODE_PATH}`
+  : fallbackNodePath;
 moduleLib.Module._initPaths();
 const originalResolveFilename = moduleLib.Module._resolveFilename;
 moduleLib.Module._resolveFilename = function patchedResolve(request, parent, isMain, options) {
@@ -21,7 +24,7 @@ moduleLib.Module._resolveFilename = function patchedResolve(request, parent, isM
     }
     const fallbackOptions = {
       ...(options || {}),
-      paths: [frontendNodeModules, ...((options && options.paths) || [])],
+      paths: [...fallbackNodeModules, ...((options && options.paths) || [])],
     };
     return originalResolveFilename.call(this, request, parent, isMain, fallbackOptions);
   }
