@@ -32,6 +32,33 @@ const HOME_FLOW_STEPS = [
   { title: "3. Track & collect", body: "Follow progress online and collect once completed." },
 ];
 
+const HOME_OPERATIONS_SNAPSHOT = [
+  { label: "Response SLA", value: "~15 min", hint: "avg. during support hours" },
+  { label: "Delivery updates", value: "Live", hint: "status and milestones online" },
+  { label: "Quote clarity", value: "Line-item", hint: "parts and labor transparency" },
+];
+
+const HOME_PLAN_PROTECT = [
+  {
+    title: "Maintenance planning",
+    body: "Reduce repeat breakdowns with preventive recommendations after each completed job.",
+    href: "/services",
+    cta: "View programs",
+  },
+  {
+    title: "Roadside escalation",
+    body: "Raise urgent support requests and route details to the workshop with priority context.",
+    href: "/quote",
+    cta: "Start priority request",
+  },
+  {
+    title: "Parts and consumables",
+    body: "Order workshop-approved products directly and align purchase with service schedule.",
+    href: "/shop",
+    cta: "Explore shop",
+  },
+];
+
 type SupportStatus = "online" | "offline" | "break";
 
 async function getServices(): Promise<Service[]> {
@@ -164,6 +191,18 @@ export default async function Home() {
                 </li>
               </ul>
             </div>
+            <div className="mt-7 grid gap-2 sm:grid-cols-3">
+              {HOME_OPERATIONS_SNAPSHOT.map((item, idx) => (
+                <div
+                  key={item.label}
+                  className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 backdrop-blur-sm transition duration-300 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.07]"
+                >
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-400">{item.label}</p>
+                  <p className="mt-1 text-sm font-semibold text-white">{item.value}</p>
+                  <p className="text-[11px] text-zinc-500">{item.hint}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
@@ -221,6 +260,33 @@ export default async function Home() {
                 </li>
               ))}
             </ul>
+          </section>
+        </RevealOnScroll>
+
+        <RevealOnScroll delayMs={55}>
+          <section className="rounded-2xl border border-zinc-200/70 bg-white/90 p-4 shadow-sm ring-1 ring-black/[0.02] dark:border-zinc-800 dark:bg-zinc-900/60 dark:ring-white/5 sm:p-5">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-700/90 dark:text-cyan-500/80">Plan & protect</p>
+                <h3 className="mt-1 text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">Advanced customer tools</h3>
+              </div>
+              <span className="text-xs text-zinc-500 dark:text-zinc-400">Action-oriented modules</span>
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              {HOME_PLAN_PROTECT.map((item, idx) => (
+                <Link
+                  key={item.title}
+                  href={item.href}
+                  className="group rounded-xl border border-zinc-200/80 bg-zinc-50/80 px-4 py-3 transition duration-300 hover:-translate-y-1 hover:border-zinc-300 hover:bg-white hover:shadow-sm dark:border-zinc-700 dark:bg-zinc-950/70 dark:hover:border-zinc-600 dark:hover:bg-zinc-900"
+                >
+                  <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{item.title}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">{item.body}</p>
+                  <span className="mt-2 inline-block text-xs font-semibold text-cyan-700 transition group-hover:translate-x-0.5 dark:text-cyan-400">
+                    {item.cta}
+                  </span>
+                </Link>
+              ))}
+            </div>
           </section>
         </RevealOnScroll>
 
