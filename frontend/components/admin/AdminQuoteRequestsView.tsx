@@ -124,10 +124,10 @@ export default function AdminQuoteRequestsView({ pageKind }: AdminQuoteRequestsV
   const isEnquiry = pageKind === "enquiry";
 
   useEffect(() => {
-    const s = searchParams.get("status");
-    const t = searchParams.get("time");
-    const df = searchParams.get("dateFrom");
-    const dt = searchParams.get("dateTo");
+    const s = searchParams?.get("status");
+    const t = searchParams?.get("time");
+    const df = searchParams?.get("dateFrom");
+    const dt = searchParams?.get("dateTo");
     if (s && STATUS_FROM_URL.has(s)) {
       setStatusFilter(s);
     } else if (!s) {
@@ -149,9 +149,10 @@ export default function AdminQuoteRequestsView({ pageKind }: AdminQuoteRequestsV
       next.set("dateTo", dateTo);
     }
     const nextQs = next.toString();
-    const curQs = searchParams.toString();
+    const curQs = searchParams?.toString() ?? "";
     if (nextQs === curQs) return;
-    router.replace(nextQs ? `${pathname}?${nextQs}` : pathname);
+    const base = pathname || (isEnquiry ? "/admin/enquiries" : "/admin/quotes");
+    router.replace(nextQs ? `${base}?${nextQs}` : base);
   }, [statusFilter, timePreset, dateFrom, dateTo, pathname, router, searchParams]);
 
   const copyText = async (text: string, key: string) => {

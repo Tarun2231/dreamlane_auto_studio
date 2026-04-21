@@ -1,10 +1,8 @@
 {
   "name": "backend",
   "version": "1.4.0",
-  "main": "server.js",
+  "main": "src/app.js",
   "scripts": {
-    "dev": "nodemon server.js",
-    "start": "node server.js",
     "test:quote-email": "node scripts/test-quote-emails.js"
   },
   "keywords": [],

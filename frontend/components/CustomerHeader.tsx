@@ -37,13 +37,14 @@ function navActive(pathname: string, href: string) {
 
 export default function CustomerHeader() {
   const pathname = usePathname();
+  const pathnameValue = pathname ?? "";
   const [open, setOpen] = useState(false);
   const { itemCount } = useShopCart();
   const { location, setLocation, options } = useSiteLocation();
 
   const linkClass = (href: string) =>
     `rounded-full px-4 py-2 text-sm font-medium transition ${
-      navActive(pathname, href)
+      navActive(pathnameValue, href)
         ? "bg-black text-white shadow-sm dark:bg-white dark:text-black"
         : "text-gray-700 hover:bg-black/5 dark:text-zinc-300 dark:hover:bg-white/10"
     }`;
@@ -71,7 +72,7 @@ export default function CustomerHeader() {
           <Link
             href="/shop/cart"
             className={`relative rounded-full px-4 py-2 text-sm font-medium transition ${
-              navActive(pathname, "/shop/cart")
+              navActive(pathnameValue, "/shop/cart")
                 ? "bg-black text-white shadow-sm dark:bg-white dark:text-black"
                 : "text-gray-700 hover:bg-black/5 dark:text-zinc-300 dark:hover:bg-white/10"
             }`}

@@ -93,7 +93,7 @@ export default function BookingWizard() {
   }, []);
 
   useEffect(() => {
-    const sid = searchParams.get("serviceId");
+    const sid = searchParams?.get("serviceId");
     if (sid) {
       setForm((f) => ({ ...f, serviceId: sid }));
     }

@@ -1,13 +1,12 @@
 import axios from "axios";
 
 /**
- * Server Components: `fetch(\`${API_BASE}/services\`)` hits Express directly (SSR has no browser origin).
- * Browser: same-origin `/api/...` → Next route handler proxies to Express (see `app/api/[[...path]]/route.ts`).
+ * API is served from Next.js at same-origin `/api/...` (Vercel-compatible).
  */
 const SERVER_API_BASE =
   process.env.INTERNAL_API_BASE ||
   process.env.NEXT_PUBLIC_API_BASE ||
-  "http://127.0.0.1:5000/api";
+  `${process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || "http://127.0.0.1:3000"}/api`;
 
 const SERVER_API_ROOT = SERVER_API_BASE.replace(/\/?$/, "/");
 

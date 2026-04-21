@@ -38,13 +38,14 @@ export default function AdminReviewsPage() {
   const pathname = usePathname();
 
   const filter = useMemo(() => {
-    const s = searchParams.get("status");
+    const s = searchParams?.get("status");
     return s && STATUS_FROM_URL.has(s) ? s : "";
   }, [searchParams]);
 
   const applyFilter = (f: string) => {
-    if (!f) router.replace(pathname);
-    else router.replace(`${pathname}?status=${encodeURIComponent(f)}`);
+    const base = pathname || "/admin/reviews";
+    if (!f) router.replace(base);
+    else router.replace(`${base}?status=${encodeURIComponent(f)}`);
   };
 
   const [items, setItems] = useState<ReviewRow[]>([]);

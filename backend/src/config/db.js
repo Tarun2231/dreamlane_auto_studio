@@ -1,17 +1,3 @@
-const mongoose = require("mongoose");
-const ensureDefaultAdmin = require("../bootstrap/ensureAdmin");
-const ensureDefaultServices = require("../bootstrap/ensureDefaultServices");
+const connectMongo = require("../../../lib/mongodb");
 
-const connectDB = async () => {
-  try {
-    await mongoose.connect(process.env.MONGO_URI);
-    console.log("MongoDB connected");
-    await ensureDefaultAdmin();
-    await ensureDefaultServices();
-  } catch (error) {
-    console.error("MongoDB connection failed:", error.message);
-    process.exit(1);
-  }
-};
-
-module.exports = connectDB;
+module.exports = connectMongo;

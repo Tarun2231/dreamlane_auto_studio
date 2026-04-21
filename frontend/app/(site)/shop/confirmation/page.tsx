@@ -6,7 +6,7 @@ import { Suspense } from "react";
 
 function ConfirmationInner() {
   const search = useSearchParams();
-  const order = search.get("order") || "";
+  const order = search?.get("order") || "";
 
   return (
     <main className="mx-auto max-w-lg px-4 py-16 text-center">

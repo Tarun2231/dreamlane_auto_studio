@@ -329,7 +329,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
           </div>
 
           <div className="flex flex-1 flex-col overflow-y-auto px-5 pb-4 pt-2 md:pt-4">
-            <SidebarNav pathname={pathname} onNavigate={() => setMobileNavOpen(false)} />
+            <SidebarNav pathname={pathname ?? ""} onNavigate={() => setMobileNavOpen(false)} />
             <AdminLoginHistorySidebar />
             <div className="mt-auto space-y-2 border-t border-zinc-200 pt-6 dark:border-zinc-800">
               <p className="px-1 pt-2 text-[10px] leading-relaxed text-zinc-400 dark:text-zinc-500">

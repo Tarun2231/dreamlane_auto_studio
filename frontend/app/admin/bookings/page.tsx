@@ -150,10 +150,10 @@ function AdminBookingsPageContent() {
   }, [selected?._id]);
 
   useEffect(() => {
-    const single = searchParams.get("date");
-    const df = searchParams.get("dateFrom");
-    const dt = searchParams.get("dateTo");
-    const st = searchParams.get("status");
+    const single = searchParams?.get("date");
+    const df = searchParams?.get("dateFrom");
+    const dt = searchParams?.get("dateTo");
+    const st = searchParams?.get("status");
     if (df && /^\d{4}-\d{2}-\d{2}$/.test(df)) {
       setDateFrom(df);
       if (dt && /^\d{4}-\d{2}-\d{2}$/.test(dt)) setDateTo(dt);

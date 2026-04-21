@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import QuoteThreadPanel from "@/components/QuoteThreadPanel";
 import { api } from "@/lib/api";
 import { QuoteRequest, Service } from "@/lib/types";
@@ -35,7 +35,7 @@ function requestKindLabel(q: QuoteRequest) {
   return q.requestKind === "enquiry" ? "Enquiry" : "Quotation";
 }
 
-export default function QuoteTrackPage() {
+function QuoteTrackPageInner() {
   const searchParams = useSearchParams();
   const [id, setId] = useState("");
   const [email, setEmail] = useState("");
@@ -61,8 +61,8 @@ export default function QuoteTrackPage() {
 
   useEffect(() => {
     if (bootstrapped) return;
-    const qpId = String(searchParams.get("id") || "").trim();
-    const qpEmail = String(searchParams.get("email") || "").trim();
+    const qpId = String(searchParams?.get("id") || "").trim();
+    const qpEmail = String(searchParams?.get("email") || "").trim();
     if (qpId) setId(qpId);
     if (qpEmail) setEmail(qpEmail);
     if (qpId && qpEmail) {
@@ -317,5 +317,13 @@ export default function QuoteTrackPage() {
         </Link>
       </p>
     </main>
+  );
+}
+
+export default function QuoteTrackPage() {
+  return (
+    <Suspense fallback={<main className="mx-auto max-w-3xl px-4 py-10 text-sm text-zinc-500">Loading…</main>}>
+      <QuoteTrackPageInner />
+    </Suspense>
   );
 }

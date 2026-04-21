@@ -5,18 +5,20 @@ Full-stack web app with two fully separate interfaces:
 - Admin Panel (private operations system)
 
 ## Stack
-- Frontend: Next.js + Tailwind CSS
-- Backend: Node.js + Express
+- Frontend + API runtime: Next.js + Tailwind CSS
+- API handlers: Next.js `pages/api` with Express-style routing (Vercel deployable)
 - Database: MongoDB + Mongoose
 - Uploads: Cloudinary
 - Auth: JWT (admin-only protected routes)
 
 ## Project Structure
-- `frontend/` — Next.js app (customer + admin UI)
+- `frontend/` — Next.js app (customer + admin UI + API entrypoint)
   - `app/` — pages and routes
+  - `pages/api/[[...path]].js` — serverless API entrypoint used in local + Vercel
   - `components/` — reusable UI
   - `lib/` — API clients and shared types
-- `backend/` — Express API, models, middleware, routes
+- `backend/` — domain API modules, models, middleware, routes (mounted by Next API runtime)
+- `lib/mongodb.js` — shared MongoDB connection + bootstrap utility
 
 ## Key Features
 - Customer flow: homepage, dynamic services, step booking, confirmation page
@@ -26,6 +28,7 @@ Full-stack web app with two fully separate interfaces:
 - Mandatory BEFORE images before setting a booking to `In Progress`
 - **PDF exports (admin):** branded **job sheet** (service summary, payment breakdown, before/after photos) and **invoice** (line items, discount env, bank block) — download or email to the customer when SMTP is configured
 - Customer never sees internal pricing logic/admin data
+- Booking confirmation emails are enhanced with rich branded HTML, booking summary, track-booking CTA, and invoice CTA
 
 Configure PDF/invoice branding and bank lines via `backend/.env` (see `backend/.env.example`: `JOB_SHEET_*`, `INVOICE_*`).
 
@@ -44,26 +47,20 @@ npm run install:all
 ```
 (`install:all` runs `npm install` in `frontend/` and `backend/`. You can also run `npm install` in each folder yourself.)
 
-4) Seed admin account (after the API is running)
+4) Seed admin account (after the app is running)
 ```bash
-POST http://localhost:5000/api/auth/seed-admin
+POST http://localhost:3000/api/auth/seed-admin
 ```
 
-5) Run **frontend + backend together** — see [Run locally in VS Code](#run-locally-in-vs-code) below, or from the project root in any terminal:
+5) Run the app (site + API together via Next.js) from the project root:
 ```bash
 npm run dev
 ```
-This starts Next.js and Express (MongoDB must be running). Logs are labeled `web` and `api`.
-
-Optional — run only one side:
-```bash
-npm run dev:web   # Next.js only
-npm run dev:api   # Express only
-```
+This starts Next.js with API routes under `/api` (MongoDB must be running).
 
 ## Run locally in VS Code
 
-Use the **integrated terminal** in VS Code (**View → Terminal**, or `` Ctrl+` `` / `` Ctrl+Shift+` `` for a new terminal) so paths and `npm` scripts resolve the same way as below. You need both the **frontend** (Next.js in `frontend/`) and **backend** (Express in `backend/`) for the full app.
+Use the **integrated terminal** in VS Code (**View → Terminal**, or `` Ctrl+` `` / `` Ctrl+Shift+` `` for a new terminal) so paths and `npm` scripts resolve the same way as below.
 
 ### Prerequisites
 - [Node.js](https://nodejs.org/) (LTS recommended)
@@ -74,44 +71,31 @@ Use the **integrated terminal** in VS Code (**View → Terminal**, or `` Ctrl+` 
 1. **File → Open Folder…** and choose the **repository root** (the folder that contains both `frontend/` and `backend/`), not only one of those subfolders.
 2. Confirm the terminal’s current directory is that root (the prompt usually shows the folder name). If not, `cd` to it first.
 
-### Run frontend + backend together (recommended)
+### Run website + API together (recommended)
 In the integrated terminal, from the **repository root**:
 
 ```bash
 npm run dev
 ```
 
-This starts **both** processes in one terminal with labels:
+This starts Next.js with API handlers at `/api/...`:
 
 | Label | What it runs | Default URL |
 |--------|----------------|---------------|
 | `web` | Next.js (`frontend/`) | [http://localhost:3000](http://localhost:3000) |
-| `api` | Express (`backend/`) | [http://localhost:5000](http://localhost:5000) — [http://localhost:5000/api/health](http://localhost:5000/api/health) |
+| `api` | Next API route handlers | [http://localhost:3000/api/health](http://localhost:3000/api/health) |
 
 If port **3000** is busy, Next.js picks another port; check the `web` output for the exact URL.
 
-### Run frontend and backend in separate VS Code terminals (optional)
-Use **Terminal → Split Terminal** or a **second terminal tab** so each side has its own log stream.
+### Run frontend directly (optional)
+If you prefer running directly from the app package:
 
-**Option A — from the repo root (same as above, but split):**
+```bash
+cd frontend
+npm run dev
+```
 
-- Terminal 1: `npm run dev:web` → frontend only  
-- Terminal 2: `npm run dev:api` → backend only  
-
-**Option B — `cd` into each package:**
-
-- Terminal 1:
-  ```bash
-  cd frontend
-  npm run dev
-  ```
-- Terminal 2:
-  ```bash
-  cd backend
-  npm run dev
-  ```
-
-Same ports: **3000** (site) and **5000** (API) unless your environment changes them.
+Same port: **3000** (site + API) unless your environment changes it.
 
 ### Windows PowerShell note
 If `cd folder && command` fails, use two lines or:

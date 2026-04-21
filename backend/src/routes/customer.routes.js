@@ -229,11 +229,59 @@ router.post("/booking", async (req, res) => {
 
       const garage =
         process.env.JOB_SHEET_GARAGE_NAME || process.env.REMINDER_GARAGE_NAME || process.env.SMTP_FROM || "Our workshop";
+      const origin = appBaseUrl();
+      const bookingId = String(booking._id);
+      const shortId = bookingId.slice(-8);
+      const trackHref = `${origin}/booking/track?id=${encodeURIComponent(bookingId)}&email=${encodeURIComponent(
+        String(email || "").trim()
+      )}`;
+      const invoiceHref = `${origin}/booking/confirmation/${encodeURIComponent(bookingId)}`;
+      const bookingHtml = renderMailCard({
+        eyebrow: "Booking confirmed",
+        title: "Your service visit is booked",
+        intro: `Hi ${customerName}, thanks for booking with ${garage}.`,
+        bodyHtml: `
+          <p style="margin:0 0 8px 0"><strong>Booking ID:</strong> ${escapeHtml(bookingId)}</p>
+          <p style="margin:0 0 8px 0"><strong>Short ref:</strong> ${escapeHtml(shortId)}</p>
+          <p style="margin:0 0 8px 0"><strong>Date & time:</strong> ${escapeHtml(date)} at ${escapeHtml(time)}</p>
+          <p style="margin:0 0 8px 0"><strong>Service:</strong> ${escapeHtml(String(vehicleType || "General service"))}</p>
+          <p style="margin:0 0 8px 0"><strong>Vehicle:</strong> ${escapeHtml(carMake)} ${escapeHtml(carModel)} (${escapeHtml(
+            String(vehicleYear)
+          )})</p>
+          <p style="margin:0 0 12px 0"><strong>Chassis (RC):</strong> ${escapeHtml(chassisNumber)}</p>
+          <a href="${escapeHtml(invoiceHref)}" style="display:inline-block;background:#0f766e;color:#fff;text-decoration:none;padding:10px 14px;border-radius:999px;font-weight:700">Open booking & download invoice</a>
+        `,
+        ctaLabel: "Track booking",
+        ctaHref: trackHref,
+        footnote:
+          "Use the same email address from this booking to view details and download your invoice. Keep your Booking ID safe.",
+      });
       await transporter.sendMail({
         from: process.env.SMTP_FROM || process.env.SMTP_USER || "noreply@carcare.com",
         to: email,
-        subject: `We received your service booking — ${String(booking._id).slice(-8)}`,
-        text: `Hi ${customerName},\n\nThank you — we have received your service booking.\n\nWe will get in touch with you if we need any further details before your visit.\n\n--- Your booking ---\nBooking ID: ${booking._id}\nDate: ${date}\nTime: ${time}\nVehicle: ${carMake} ${carModel} (${vehicleYear})\nChassis (RC): ${chassisNumber}\n\nSave your booking ID to track your appointment on our website.\n\n— ${garage}`,
+        subject: `Booking confirmed — ${shortId}`,
+        html: bookingHtml,
+        text: `Hi ${customerName},
+
+Your booking is confirmed with ${garage}.
+
+Booking ID: ${bookingId}
+Short ref: ${shortId}
+Date: ${date}
+Time: ${time}
+Service: ${vehicleType || "General service"}
+Vehicle: ${carMake} ${carModel} (${vehicleYear})
+Chassis (RC): ${chassisNumber}
+
+Track your booking and download invoice:
+${trackHref}
+
+Open booking page (invoice section):
+${invoiceHref}
+
+Please keep this booking ID safe.
+
+— ${garage}`,
       });
     } catch (mailErr) {
       // Booking is already saved; email issues should not fail the customer flow.
