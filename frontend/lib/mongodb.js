@@ -1,22 +1,23 @@
-const mongoose = require("mongoose");
+const { MongoClient } = require("mongodb");
 
-const globalForMongo = global;
-
-if (!globalForMongo.__frontendMongo) {
-  globalForMongo.__frontendMongo = { conn: null, promise: null };
+const uri = process.env.MONGO_URI;
+if (!uri) {
+  throw new Error("Please define the MONGO_URI environment variable");
 }
 
-async function connectMongo() {
-  if (globalForMongo.__frontendMongo.conn) return globalForMongo.__frontendMongo.conn;
+const options = {};
+let client;
+let clientPromise;
 
-  if (!globalForMongo.__frontendMongo.promise) {
-    const uri = process.env.MONGO_URI;
-    if (!uri) throw new Error("MONGO_URI is not set");
-    globalForMongo.__frontendMongo.promise = mongoose.connect(uri);
+if (process.env.NODE_ENV === "development") {
+  if (!global._mongoClientPromise) {
+    client = new MongoClient(uri, options);
+    global._mongoClientPromise = client.connect();
   }
-
-  globalForMongo.__frontendMongo.conn = await globalForMongo.__frontendMongo.promise;
-  return globalForMongo.__frontendMongo.conn;
+  clientPromise = global._mongoClientPromise;
+} else {
+  client = new MongoClient(uri, options);
+  clientPromise = client.connect();
 }
 
-module.exports = connectMongo;
+module.exports = clientPromise;

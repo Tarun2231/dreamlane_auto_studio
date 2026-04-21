@@ -1,31 +1,17 @@
-/* eslint-disable @typescript-eslint/no-require-imports */
-const path = require("path");
-const runtimeRequire = eval("require");
+import clientPromise from "../../lib/mongodb";
 
-const repoRoot = path.join(process.cwd(), "..");
-function requireShared(modulePathInRepo, modulePathInPackage) {
+export default async function handler(req, res) {
   try {
-    return runtimeRequire(modulePathInPackage);
-  } catch {
-    return runtimeRequire(path.join(repoRoot, modulePathInRepo));
-  }
-}
-
-const connectMongo = require("../../lib/mongodb");
-const mongoose = runtimeRequire("mongoose");
-
-module.exports = async function handler(_req, res) {
-  try {
-    await connectMongo();
-    const db = mongoose.connection.db;
+    const client = await clientPromise;
+    const db = client.db("car-service");
 
     const result = await db.collection("test").insertOne({
-      message: "MongoDB connected successfully",
+      message: "MongoDB working",
       time: new Date(),
     });
 
     res.status(200).json({ success: true, result });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ error: error.message });
   }
-};
+}
