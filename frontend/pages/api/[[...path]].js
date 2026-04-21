@@ -1,8 +1,15 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 const path = require("path");
 const runtimeRequire = eval("require");
+const moduleLib = require("module");
 const repoRoot = path.join(process.cwd(), "..");
 const dotenv = require("dotenv");
+
+const frontendNodeModules = path.join(process.cwd(), "node_modules");
+process.env.NODE_PATH = process.env.NODE_PATH
+  ? `${frontendNodeModules}${path.delimiter}${process.env.NODE_PATH}`
+  : frontendNodeModules;
+moduleLib.Module._initPaths();
 
 dotenv.config({ path: path.join(repoRoot, "backend", ".env") });
 
