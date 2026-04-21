@@ -3,7 +3,15 @@ const path = require("path");
 const runtimeRequire = eval("require");
 
 const repoRoot = path.join(process.cwd(), "..");
-const connectMongo = runtimeRequire(path.join(repoRoot, "lib", "mongodb"));
+function requireShared(modulePathInRepo, modulePathInPackage) {
+  try {
+    return runtimeRequire(modulePathInPackage);
+  } catch {
+    return runtimeRequire(path.join(repoRoot, modulePathInRepo));
+  }
+}
+
+const connectMongo = requireShared("lib/mongodb", "car-service-business/lib/mongodb");
 const mongoose = runtimeRequire("mongoose");
 
 module.exports = async function handler(_req, res) {

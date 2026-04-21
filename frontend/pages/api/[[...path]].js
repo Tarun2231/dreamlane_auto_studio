@@ -6,10 +6,19 @@ const dotenv = require("dotenv");
 
 dotenv.config({ path: path.join(repoRoot, "backend", ".env") });
 
-const connectMongo = runtimeRequire(path.join(repoRoot, "lib", "mongodb"));
-const app = runtimeRequire(path.join(repoRoot, "backend", "src", "app"));
-const { startServiceReminderCron } = runtimeRequire(
-  path.join(repoRoot, "backend", "src", "jobs", "serviceReminders")
+function requireShared(modulePathInRepo, modulePathInPackage) {
+  try {
+    return runtimeRequire(modulePathInPackage);
+  } catch {
+    return runtimeRequire(path.join(repoRoot, modulePathInRepo));
+  }
+}
+
+const connectMongo = requireShared("lib/mongodb", "car-service-business/lib/mongodb");
+const app = requireShared("backend/src/app", "car-service-business/backend/src/app");
+const { startServiceReminderCron } = requireShared(
+  "backend/src/jobs/serviceReminders",
+  "car-service-business/backend/src/jobs/serviceReminders"
 );
 
 let cronStarted = false;
