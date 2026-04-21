@@ -2,9 +2,17 @@
 const path = require("path");
 const jwt = require("jsonwebtoken");
 const connectMongo = require("../../../../lib/mongodbMongoose");
+const runtimeRequire = eval("require");
 
 const repoRoot = path.join(process.cwd(), "..");
-const User = require(path.join(repoRoot, "backend", "src", "models", "User"));
+function requireShared(modulePathInRepo, modulePathInPackage) {
+  try {
+    return runtimeRequire(modulePathInPackage);
+  } catch {
+    return runtimeRequire(path.join(repoRoot, modulePathInRepo));
+  }
+}
+const User = requireShared("backend/src/models/User", "car-service-business/backend/src/models/User");
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
