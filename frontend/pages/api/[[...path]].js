@@ -2,8 +2,7 @@
 const path = require("path");
 const runtimeRequire = eval("require");
 const repoRoot = path.join(process.cwd(), "..");
-const backendRequire = runtimeRequire("module").createRequire(path.join(repoRoot, "backend", "package.json"));
-const dotenv = backendRequire("dotenv");
+const dotenv = runtimeRequire("dotenv");
 
 dotenv.config({ path: path.join(repoRoot, "backend", ".env") });
 
