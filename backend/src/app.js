@@ -1,4 +1,17 @@
 const path = require("path");
+const Module = require("module");
+
+const sharedNodePaths = [
+  path.join(process.cwd(), "node_modules"),
+  path.join(process.cwd(), "..", "node_modules"),
+  path.join(process.cwd(), "frontend", "node_modules"),
+];
+const sharedNodePath = sharedNodePaths.join(path.delimiter);
+process.env.NODE_PATH = process.env.NODE_PATH
+  ? `${sharedNodePath}${path.delimiter}${process.env.NODE_PATH}`
+  : sharedNodePath;
+Module._initPaths();
+
 const express = require("express");
 const cors = require("cors");
 const morgan = require("morgan");
