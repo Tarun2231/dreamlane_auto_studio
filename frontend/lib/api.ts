@@ -20,15 +20,13 @@ function normalizeUrl(url?: string) {
 
 function clientApiRoot(): string {
   if (typeof window === "undefined") return SERVER_API_ROOT;
-  const fromEnv = process.env.NEXT_PUBLIC_API_URL?.replace(/\/?$/, "/");
-  if (fromEnv) return fromEnv;
+  // In browser, always use same-origin API to avoid stale/misconfigured public env vars.
   return `${window.location.origin}/api/`;
 }
 
 function clientAdminRoot(): string {
   if (typeof window === "undefined") return `${SERVER_API_ROOT}admin/`;
-  const fromEnv = process.env.NEXT_PUBLIC_API_URL?.replace(/\/?$/, "/");
-  if (fromEnv) return `${fromEnv}admin/`;
+  // In browser, always use same-origin admin API for reliability on Vercel.
   return `${window.location.origin}/api/admin/`;
 }
 
