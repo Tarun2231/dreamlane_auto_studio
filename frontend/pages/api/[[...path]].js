@@ -38,13 +38,19 @@ function requireShared(modulePathInRepo, modulePathInPackage) {
 }
 
 const connectMongo = require("../../lib/mongodbMongoose");
-const app = requireShared("backend/src/app", "car-service-business/backend/src/app");
-const { startServiceReminderCron } = requireShared(
-  "backend/src/jobs/serviceReminders",
-  "car-service-business/backend/src/jobs/serviceReminders"
-);
 
 let cronStarted = false;
+let app = null;
+let startServiceReminderCron = null;
+
+function ensureBackendLoaded() {
+  if (app && startServiceReminderCron) return;
+  app = requireShared("backend/src/app", "car-service-business/backend/src/app");
+  ({ startServiceReminderCron } = requireShared(
+    "backend/src/jobs/serviceReminders",
+    "car-service-business/backend/src/jobs/serviceReminders"
+  ));
+}
 
 const config = {
   api: {
@@ -55,6 +61,7 @@ const config = {
 
 async function handler(req, res) {
   try {
+    ensureBackendLoaded();
     await connectMongo();
     if (!cronStarted) {
       startServiceReminderCron();
