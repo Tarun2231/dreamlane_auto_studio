@@ -10,6 +10,22 @@ process.env.NODE_PATH = process.env.NODE_PATH
   ? `${frontendNodeModules}${path.delimiter}${process.env.NODE_PATH}`
   : frontendNodeModules;
 moduleLib.Module._initPaths();
+const originalResolveFilename = moduleLib.Module._resolveFilename;
+moduleLib.Module._resolveFilename = function patchedResolve(request, parent, isMain, options) {
+  try {
+    return originalResolveFilename.call(this, request, parent, isMain, options);
+  } catch (error) {
+    const isBareImport = typeof request === "string" && !request.startsWith(".") && !path.isAbsolute(request);
+    if (!isBareImport || error?.code !== "MODULE_NOT_FOUND") {
+      throw error;
+    }
+    const fallbackOptions = {
+      ...(options || {}),
+      paths: [frontendNodeModules, ...((options && options.paths) || [])],
+    };
+    return originalResolveFilename.call(this, request, parent, isMain, fallbackOptions);
+  }
+};
 
 dotenv.config({ path: path.join(repoRoot, "backend", ".env") });
 
