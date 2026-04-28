@@ -1400,7 +1400,7 @@ router.post("/bookings/:bookingId/email-invoice", async (req, res) => {
 
     if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
       return res.status(400).json({
-        message: "SMTP is not configured. Add SMTP_HOST, SMTP_USER, SMTP_PASS (and optional SMTP_FROM) to backend/.env.",
+        message: "SMTP is not configured. Add SMTP_HOST, SMTP_USER, SMTP_PASS (and optional SMTP_FROM) to frontend/backend/.env.",
       });
     }
 
@@ -1438,7 +1438,7 @@ router.post("/bookings/:bookingId/email-job-sheet", async (req, res) => {
 
     if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
       return res.status(400).json({
-        message: "SMTP is not configured. Add SMTP_HOST, SMTP_USER, SMTP_PASS (and optional SMTP_FROM) to backend/.env.",
+        message: "SMTP is not configured. Add SMTP_HOST, SMTP_USER, SMTP_PASS (and optional SMTP_FROM) to frontend/backend/.env.",
       });
     }
 
@@ -1485,7 +1485,7 @@ router.get("/customers", async (req, res) => {
   }
 });
 
-/** Manual outreach (offers, notes) — uses SMTP from backend/.env */
+/** Manual outreach (offers, notes) — uses SMTP from frontend/backend/.env */
 router.post("/customers/send-email", async (req, res) => {
   const { to, subject, text } = req.body || {};
   if (!to || !subject || typeof text !== "string") {
@@ -1493,7 +1493,7 @@ router.post("/customers/send-email", async (req, res) => {
   }
   if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
     return res.status(400).json({
-      message: "SMTP is not configured. Add SMTP_HOST, SMTP_USER, SMTP_PASS to backend/.env.",
+      message: "SMTP is not configured. Add SMTP_HOST, SMTP_USER, SMTP_PASS to frontend/backend/.env.",
     });
   }
   try {
@@ -1761,7 +1761,7 @@ router.post("/quote-request/:id/email-quote", async (req, res) => {
   }
   if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
     return res.status(400).json({
-      message: "SMTP is not configured. Add SMTP_HOST, SMTP_USER, SMTP_PASS to backend/.env.",
+      message: "SMTP is not configured. Add SMTP_HOST, SMTP_USER, SMTP_PASS to frontend/backend/.env.",
     });
   }
   const quote = await QuoteRequest.findById(req.params.id);

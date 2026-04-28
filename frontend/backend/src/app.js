@@ -74,9 +74,21 @@ app.get("/api/auth/admin/login", (_req, res) => {
     openInstead: "/admin/login on your Next.js site",
   });
 });
+app.get("/api/auth/login", (_req, res) => {
+  res.status(200).json({
+    message: "This URL expects POST with JSON { email, password }.",
+    openInstead: "/admin/login on your Next.js site",
+  });
+});
 
 app.use("/api/auth", require("./routes/auth.routes"));
 app.use("/api", require("./routes/customer.routes"));
 app.use("/api/admin", require("./routes/admin.routes"));
+
+// Ensure all API failures return JSON in serverless runtime.
+app.use((err, _req, res, _next) => {
+  console.error("Unhandled API error:", err);
+  return res.status(500).json({ message: err?.message || "Internal server error" });
+});
 
 module.exports = app;

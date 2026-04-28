@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 const path = require("path");
+const fs = require("fs");
 const runtimeRequire = eval("require");
 const moduleLib = require("module");
-const repoRoot = path.join(process.cwd(), "..");
 const dotenv = require("dotenv");
 // Keep these static imports so Turbopack traces backend runtime deps into the serverless bundle.
 require("express");
@@ -34,14 +34,28 @@ moduleLib.Module._resolveFilename = function patchedResolve(request, parent, isM
   }
 };
 
-dotenv.config({ path: path.join(repoRoot, "backend", ".env") });
+function resolveRepoRoot() {
+  const cwd = process.cwd();
+  const candidates = [cwd, path.join(cwd, "..")];
+  return (
+    candidates.find((candidate) =>
+      fs.existsSync(path.join(candidate, "backend", "src", "app.js")) ||
+      fs.existsSync(path.join(candidate, "frontend", "backend", "src", "app.js"))
+    ) || cwd
+  );
+}
 
-function requireShared(modulePathInRepo, modulePathInPackage) {
-  try {
-    return runtimeRequire(modulePathInPackage);
-  } catch {
-    return runtimeRequire(path.join(repoRoot, modulePathInRepo));
-  }
+const repoRoot = resolveRepoRoot();
+const backendRoot = fs.existsSync(path.join(repoRoot, "backend", "src", "app.js"))
+  ? path.join(repoRoot, "backend")
+  : path.join(repoRoot, "frontend", "backend");
+const backendEnvPath = path.join(backendRoot, ".env");
+if (fs.existsSync(backendEnvPath)) {
+  dotenv.config({ path: backendEnvPath });
+}
+
+function requireShared(modulePathInBackend) {
+  return runtimeRequire(path.join(backendRoot, modulePathInBackend));
 }
 
 const connectMongo = require("../../lib/mongodbMongoose");
@@ -52,11 +66,8 @@ let startServiceReminderCron = null;
 
 function ensureBackendLoaded() {
   if (app && startServiceReminderCron) return;
-  app = requireShared("backend/src/app", "car-service-business/backend/src/app");
-  ({ startServiceReminderCron } = requireShared(
-    "backend/src/jobs/serviceReminders",
-    "car-service-business/backend/src/jobs/serviceReminders"
-  ));
+  app = requireShared("src/app");
+  ({ startServiceReminderCron } = requireShared("src/jobs/serviceReminders"));
 }
 
 const config = {
@@ -77,7 +88,14 @@ async function handler(req, res) {
     app(req, res);
   } catch (error) {
     console.error("API bootstrap failed:", error);
-    res.status(500).json({ message: "API bootstrap failed" });
+    const msg = String(error?.message || "");
+    const dbDown =
+      /ECONNREFUSED/i.test(msg) || /ServerSelectionError/i.test(String(error?.name || "")) || /MONGO_URI/i.test(msg);
+    res.status(500).json({
+      message: dbDown
+        ? "Database is unavailable. Start MongoDB (or set a reachable MONGO_URI) and try again."
+        : "API bootstrap failed",
+    });
   }
 }
 

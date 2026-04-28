@@ -1021,7 +1021,7 @@ export default function AdminQuoteRequestsView({ pageKind }: AdminQuoteRequestsV
                     </button>
                   </div>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    Save amount and notes first so the emailed quotation matches what you entered. Email uses SMTP from backend/.env.
+                    Save amount and notes first so the emailed quotation matches what you entered. Email uses SMTP from frontend/backend/.env.
                   </p>
                   {selected.quotedAmount != null && selected.quotedAmount > 0 && (
                     <p className="text-sm text-zinc-600 dark:text-zinc-400">

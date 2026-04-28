@@ -355,7 +355,7 @@ function AdminBookingsPageContent() {
       const err = e as { response?: { data?: { message?: string } } };
       setSheetMsg({
         type: "err",
-        text: err?.response?.data?.message || "Could not send email. Check SMTP settings in backend/.env.",
+        text: err?.response?.data?.message || "Could not send email. Check SMTP settings in frontend/backend/.env.",
       });
     }
   };
