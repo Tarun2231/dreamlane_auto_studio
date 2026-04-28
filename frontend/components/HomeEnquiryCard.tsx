@@ -61,7 +61,12 @@ export default function HomeEnquiryCard({ className = "" }: HomeEnquiryCardProps
       router.push(`/quote/confirmation/${data._id}${emailIssue}`);
     } catch (ex: unknown) {
       const ax = ex as { response?: { data?: { message?: string } } };
-      setErr(ax?.response?.data?.message ?? "Could not send — try again.");
+      const serverMessage = String(ax?.response?.data?.message || "").trim();
+      if (serverMessage) {
+        setErr(serverMessage.replace(/quote request/gi, "enquiry"));
+      } else {
+        setErr("Could not submit enquiry right now. Please try again.");
+      }
     } finally {
       setLoading(false);
     }

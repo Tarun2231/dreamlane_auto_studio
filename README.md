@@ -12,13 +12,13 @@ Full-stack web app with two fully separate interfaces:
 - Auth: JWT (admin-only protected routes)
 
 ## Project Structure
-- `frontend/` — Next.js app (customer + admin UI + API entrypoint)
+- `frontend/` — single app folder containing customer UI, admin UI, API entrypoint, and server domain code
   - `app/` — pages and routes
   - `pages/api/[[...path]].js` — serverless API entrypoint used in local + Vercel
+  - `backend/` — API domain modules, models, middleware, routes
   - `components/` — reusable UI
   - `lib/` — API clients and shared types
-- `backend/` — domain API modules, models, middleware, routes (mounted by Next API runtime)
-- `lib/mongodb.js` — shared MongoDB connection + bootstrap utility
+- `server/mongodb.js` — shared MongoDB connection + bootstrap utility
 
 ## Key Features
 - Customer flow: homepage, dynamic services, step booking, confirmation page
@@ -30,22 +30,22 @@ Full-stack web app with two fully separate interfaces:
 - Customer never sees internal pricing logic/admin data
 - Booking confirmation emails are enhanced with rich branded HTML, booking summary, track-booking CTA, and invoice CTA
 
-Configure PDF/invoice branding and bank lines via `backend/.env` (see `backend/.env.example`: `JOB_SHEET_*`, `INVOICE_*`).
+Configure PDF/invoice branding and bank lines via `frontend/backend/.env` (see `frontend/backend/.env.example`: `JOB_SHEET_*`, `INVOICE_*`).
 
 ## Setup
 
 1) Frontend env
 - Copy `frontend/.env.example` to `frontend/.env.local`
 
-2) Backend env
-- Copy `backend/.env.example` to `backend/.env`
+2) API env (inside app folder)
+- Copy `frontend/backend/.env.example` to `frontend/backend/.env`
 
 3) Install dependencies (from the project root)
 ```bash
 npm install
 npm run install:all
 ```
-(`install:all` runs `npm install` in `frontend/` and `backend/`. You can also run `npm install` in each folder yourself.)
+(`install:all` runs `npm install` in both `frontend/` and `frontend/backend/`. You can also run `npm install` in each folder yourself.)
 
 4) Seed admin account (after the app is running)
 ```bash
@@ -58,17 +58,28 @@ npm run dev
 ```
 This starts Next.js with API routes under `/api` (MongoDB must be running).
 
+### MongoDB requirement for API
+- API routes use MongoDB. If MongoDB is not reachable, requests return `API bootstrap failed` or `ECONNREFUSED`.
+- Ensure `MONGO_URI` in `frontend/backend/.env` points to a running database before testing.
+
+## Deploy as a single folder (Vercel)
+- Import the repository root (the folder containing `frontend/`).
+- Root `vercel.json` runs install/build from one place:
+  - `installCommand`: `npm run install:all`
+  - `buildCommand`: `npm run build`
+- Configure required environment variables in Vercel project settings (`MONGO_URI`, `JWT_SECRET`, email/upload vars as needed).
+
 ## Run locally in VS Code
 
 Use the **integrated terminal** in VS Code (**View → Terminal**, or `` Ctrl+` `` / `` Ctrl+Shift+` `` for a new terminal) so paths and `npm` scripts resolve the same way as below.
 
 ### Prerequisites
 - [Node.js](https://nodejs.org/) (LTS recommended)
-- **MongoDB** running locally or a reachable connection string in `backend/.env` (`MONGO_URI`; see `backend/.env.example`)
+- **MongoDB** running locally or a reachable connection string in `frontend/backend/.env` (`MONGO_URI`; see `frontend/backend/.env.example`)
 - Dependencies installed (from [Setup](#setup): `npm install` and `npm run install:all` at the repo root)
 
 ### Open the correct folder in VS Code
-1. **File → Open Folder…** and choose the **repository root** (the folder that contains both `frontend/` and `backend/`), not only one of those subfolders.
+1. **File → Open Folder…** and choose the **repository root** (the folder that contains `frontend/`), not only a nested subfolder.
 2. Confirm the terminal’s current directory is that root (the prompt usually shows the folder name). If not, `cd` to it first.
 
 ### Run website + API together (recommended)

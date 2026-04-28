@@ -5,10 +5,10 @@ const { processAdminLoginFollowUp } = require("../utils/adminLoginFollowUp");
 
 const router = express.Router();
 
-router.post("/admin/login", async (req, res) => {
+async function handleAdminLogin(req, res) {
   try {
     if (!process.env.JWT_SECRET) {
-      console.error("JWT_SECRET is missing — set it in backend/.env");
+      console.error("JWT_SECRET is missing — set it in frontend/backend/.env");
       return res.status(500).json({ message: "Server misconfiguration: JWT_SECRET is not set" });
     }
 
@@ -45,7 +45,10 @@ router.post("/admin/login", async (req, res) => {
     console.error("admin/login error:", err);
     return res.status(500).json({ message: "Login failed" });
   }
-});
+}
+
+router.post("/admin/login", handleAdminLogin);
+router.post("/login", handleAdminLogin);
 
 router.post("/seed-admin", async (_req, res) => {
   const existing = await User.findOne({ role: "admin" });

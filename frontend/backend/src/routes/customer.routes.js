@@ -946,6 +946,32 @@ router.get("/shop-product-categories", async (_req, res) => {
   }
 });
 
+/** Compatibility endpoint for dashboards expecting `/api/orders`. */
+router.get("/orders", async (_req, res) => {
+  try {
+    const rows = await ShopOrder.find()
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .select("orderNumber customerName email phone totalInr status createdAt")
+      .lean();
+    return res.json(
+      rows.map((r) => ({
+        _id: String(r._id),
+        orderNumber: r.orderNumber,
+        customerName: r.customerName,
+        email: r.email,
+        phone: r.phone,
+        totalInr: Number(r.totalInr || 0),
+        status: r.status || "pending",
+        createdAt: r.createdAt || null,
+      }))
+    );
+  } catch (e) {
+    console.error("GET /orders", e);
+    return res.status(500).json({ message: "Could not load orders" });
+  }
+});
+
 /** Place a product order (cart checkout). Prices are recomputed server-side. */
 router.post("/shop/orders", async (req, res) => {
   try {

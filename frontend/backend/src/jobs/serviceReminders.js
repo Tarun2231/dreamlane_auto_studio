@@ -73,7 +73,7 @@ async function processDueServiceReminders() {
 
 function startServiceReminderCron() {
   if (process.env.ENABLE_SERVICE_REMINDERS !== "true") {
-    console.log("[reminders] Disabled — set ENABLE_SERVICE_REMINDERS=true in backend/.env for daily emails.");
+    console.log("[reminders] Disabled — set ENABLE_SERVICE_REMINDERS=true in frontend/backend/.env for daily emails.");
     return;
   }
   const expr = process.env.REMINDER_CRON || "0 8 * * *";

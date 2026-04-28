@@ -2,7 +2,7 @@
  * Sends sample emails matching production quote flow (customer ack + workshop copy).
  *
  * Usage:
- *   cd backend
+ *   cd frontend/backend
  *   node scripts/test-quote-emails.js [recipient@email.com]
  *
  * If omitted, uses WORKSHOP_QUOTE_EMAIL from .env (or first arg).
@@ -20,7 +20,7 @@ async function main() {
     process.exit(1);
   }
   if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    console.error("Missing SMTP_HOST, SMTP_USER, or SMTP_PASS in backend/.env");
+    console.error("Missing SMTP_HOST, SMTP_USER, or SMTP_PASS in frontend/backend/.env");
     process.exit(1);
   }
   if (String(process.env.SMTP_HOST).includes("example.com")) {

@@ -63,7 +63,7 @@ export default function AdminHelpPage() {
           <li>You review in <strong>Quotes</strong>, set <strong>Quoted amount</strong> and <strong>Quote notes</strong>, click <strong>Save</strong>.</li>
           <li>Click <strong>Email quotation</strong> (needs SMTP). Status becomes <strong>Quoted</strong>.</li>
           <li>Customer uses <strong>Track quote</strong> with ID + email; they can <strong>Accept</strong> or <strong>Decline</strong>.</li>
-          <li>Optional: set <code className="rounded bg-zinc-100 px-1 font-mono text-xs dark:bg-zinc-800">WORKSHOP_QUOTE_EMAIL</code> in <code className="rounded bg-zinc-100 px-1 font-mono text-xs dark:bg-zinc-800">backend/.env</code> to receive new requests.</li>
+          <li>Optional: set <code className="rounded bg-zinc-100 px-1 font-mono text-xs dark:bg-zinc-800">WORKSHOP_QUOTE_EMAIL</code> in <code className="rounded bg-zinc-100 px-1 font-mono text-xs dark:bg-zinc-800">frontend/backend/.env</code> to receive new requests.</li>
         </ol>
       </section>
 
@@ -81,7 +81,7 @@ export default function AdminHelpPage() {
         <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Email &amp; PDFs</h2>
         <p className="text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
           Transactional email (confirmations, job sheet, invoice) and manual customer email from the Customers page need{" "}
-          <strong>SMTP</strong> variables in <code className="rounded bg-zinc-100 px-1 font-mono text-xs dark:bg-zinc-800">backend/.env</code>.
+          <strong>SMTP</strong> variables in <code className="rounded bg-zinc-100 px-1 font-mono text-xs dark:bg-zinc-800">frontend/backend/.env</code>.
           If sending fails, check server logs and SMTP credentials.
         </p>
       </section>

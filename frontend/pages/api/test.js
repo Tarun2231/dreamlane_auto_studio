@@ -3,7 +3,7 @@ import clientPromise from "../../lib/mongodb";
 export default async function handler(req, res) {
   try {
     const client = await clientPromise;
-    const db = client.db("car-service");
+    const db = client.db(process.env.MONGO_DB_NAME || "car-service");
 
     const result = await db.collection("test").insertOne({
       message: "MongoDB working",
