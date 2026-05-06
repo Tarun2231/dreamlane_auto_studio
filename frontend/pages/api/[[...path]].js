@@ -8,6 +8,14 @@ const dotenv = require("dotenv");
 require("express");
 require("cors");
 require("morgan");
+require("nodemailer");
+require("multer");
+require("multer-storage-cloudinary");
+require("cloudinary");
+require("bcryptjs");
+require("jsonwebtoken");
+require("node-cron");
+require("pdfkit");
 
 const frontendNodeModules = path.join(process.cwd(), "node_modules");
 const parentNodeModules = path.join(process.cwd(), "..", "node_modules");

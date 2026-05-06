@@ -114,6 +114,16 @@ export function ShopCartProvider({ children }: { children: ReactNode }) {
 
 export function useShopCart() {
   const ctx = useContext(ShopCartContext);
-  if (!ctx) throw new Error("useShopCart must be used under ShopCartProvider");
+  if (!ctx) {
+    return {
+      lines: [],
+      hydrated: true,
+      itemCount: 0,
+      add: () => {},
+      setQty: () => {},
+      remove: () => {},
+      clear: () => {},
+    };
+  }
   return ctx;
 }

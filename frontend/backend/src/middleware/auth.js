@@ -9,7 +9,7 @@ const protectAdmin = (req, res, next) => {
   try {
     const token = authHeader.split(" ")[1];
     const payload = jwt.verify(token, process.env.JWT_SECRET);
-    if (payload.role !== "admin") {
+    if (!["owner", "admin", "viewer"].includes(String(payload.role || ""))) {
       return res.status(403).json({ message: "Forbidden" });
     }
     req.user = payload;

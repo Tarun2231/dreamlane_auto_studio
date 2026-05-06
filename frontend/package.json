@@ -1,6 +1,6 @@
 {
   "name": "car-service-business-web",
-  "version": "1.4.0",
+  "version": "5.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",

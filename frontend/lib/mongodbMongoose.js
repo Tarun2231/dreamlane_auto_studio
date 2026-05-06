@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const getMongoUris = require("./resolveMongoUri");
 
 const globalForMongo = global;
 
@@ -16,13 +17,25 @@ async function connectMongo() {
   }
 
   if (!globalForMongo.__frontendMongo.promise) {
-    const uri = process.env.MONGO_URI;
+    const { primary: uri } = getMongoUris();
     if (!uri) throw new Error("MONGO_URI is not set");
-    globalForMongo.__frontendMongo.promise = mongoose.connect(uri).catch((error) => {
+    const { ordered } = getMongoUris();
+    globalForMongo.__frontendMongo.promise = (async () => {
+      let firstError = null;
+      for (const candidateUri of ordered) {
+        try {
+          return await mongoose.connect(candidateUri, {
+            connectTimeoutMS: 3000,
+            serverSelectionTimeoutMS: 3000,
+          });
+        } catch (error) {
+          if (!firstError) firstError = error;
+        }
+      }
       globalForMongo.__frontendMongo.promise = null;
       globalForMongo.__frontendMongo.conn = null;
-      throw error;
-    });
+      throw firstError || new Error("Could not connect to MongoDB.");
+    })();
   }
 
   globalForMongo.__frontendMongo.conn = await globalForMongo.__frontendMongo.promise;

@@ -2,11 +2,17 @@ const path = require("path");
 const fs = require("fs");
 const multer = require("multer");
 
-const UPLOAD_ROOT = path.join(__dirname, "..", "..", "uploads", "public");
+const UPLOAD_ROOT = process.env.VERCEL
+  ? path.join("/tmp", "uploads", "public")
+  : path.join(__dirname, "..", "..", "uploads", "public");
 
 function ensureDirs() {
   for (const d of ["service-images", "shop-products"]) {
-    fs.mkdirSync(path.join(UPLOAD_ROOT, d), { recursive: true });
+    try {
+      fs.mkdirSync(path.join(UPLOAD_ROOT, d), { recursive: true });
+    } catch (e) {
+      console.error("localImageUpload ensureDirs failed:", e);
+    }
   }
 }
 ensureDirs();

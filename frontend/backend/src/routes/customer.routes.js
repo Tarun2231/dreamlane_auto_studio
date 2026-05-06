@@ -19,8 +19,14 @@ const { buildInvoicePdfBuffer } = require("../utils/invoicePdf");
 
 const router = express.Router();
 
-const threadAttachmentDir = path.join(__dirname, "..", "..", "uploads", "public", "thread-attachments");
-fs.mkdirSync(threadAttachmentDir, { recursive: true });
+const threadAttachmentDir = process.env.VERCEL
+  ? path.join("/tmp", "thread-attachments")
+  : path.join(__dirname, "..", "..", "uploads", "public", "thread-attachments");
+try {
+  fs.mkdirSync(threadAttachmentDir, { recursive: true });
+} catch (e) {
+  console.error("threadAttachmentDir init failed:", e);
+}
 const threadAttachmentUpload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, threadAttachmentDir),
@@ -55,6 +61,10 @@ function sanitizeMessageAttachments(raw) {
 /** Public support badge state used on homepage hero. */
 router.get("/site-presence", async (_req, res) => {
   try {
+    // Keep homepage responsive even when DB is temporarily unavailable.
+    if (mongoose.connection.readyState !== 1) {
+      return res.json({ supportStatus: "online", updatedAt: null });
+    }
     let doc = await SitePresence.findOne().lean();
     if (!doc) {
       doc = await SitePresence.create({ supportStatus: "online" });
@@ -345,6 +355,9 @@ router.post("/booking/invoice", async (req, res) => {
 /** Public marketing reviews (admin-approved only). */
 router.get("/reviews", async (_req, res) => {
   try {
+    if (mongoose.connection.readyState !== 1) {
+      return res.json([]);
+    }
     const rows = await Review.find({ status: "approved" })
       .sort({ createdAt: -1 })
       .limit(12)
@@ -910,6 +923,9 @@ function escapeRegex(s) {
 /** Public catalog (active products only). Optional ?category= &productGroup= &q= (search) &limit= */
 router.get("/shop-products", async (_req, res) => {
   try {
+    if (mongoose.connection.readyState !== 1) {
+      return res.json([]);
+    }
     const q = { isActive: true };
     const cat = _req.query.category;
     if (cat && String(cat).trim()) q.category = String(cat).trim();

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import AdminAccountSettingsCard from "@/components/admin/AdminAccountSettingsCard";
 import { ADMIN_APP_VERSION } from "@/lib/adminMeta";
 
 export const metadata = {
@@ -96,6 +97,8 @@ export default function AdminHelpPage() {
           <li>Export customer CSV from the Customers page after filtering.</li>
         </ul>
       </section>
+
+      <AdminAccountSettingsCard />
 
       <p className="text-sm text-zinc-600 dark:text-zinc-400">
         <Link href="/admin" className="font-medium text-amber-800 underline dark:text-amber-400">

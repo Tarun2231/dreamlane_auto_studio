@@ -13,18 +13,65 @@ async function handleAdminLogin(req, res) {
     }
 
     const { email, password } = req.body || {};
-    if (!email || !password) {
+    const normalizedEmail = String(email || "").trim().toLowerCase();
+    const normalizedPassword = String(password || "").trim();
+    if (!normalizedEmail || !normalizedPassword) {
       return res.status(400).json({ message: "Email and password are required" });
     }
 
-    const admin = await User.findOne({ email: String(email).trim(), role: "admin" });
-    if (!admin) {
-      return res.status(401).json({ message: "Invalid email or password" });
-    }
+    const envAdminEmail = String(process.env.ADMIN_EMAIL || "").trim().toLowerCase();
+    const envAdminPassword = String(process.env.ADMIN_PASSWORD || "").trim();
+    const envMatch =
+      envAdminEmail &&
+      envAdminPassword &&
+      normalizedEmail === envAdminEmail &&
+      normalizedPassword === envAdminPassword;
 
-    const isMatch = await admin.comparePassword(password);
-    if (!isMatch) {
-      return res.status(401).json({ message: "Invalid email or password" });
+    let admin;
+    if (envMatch) {
+      admin = await User.findOne({ email: envAdminEmail });
+      if (admin) {
+        admin.role = "admin";
+        admin.email = envAdminEmail;
+        admin.password = envAdminPassword;
+        if (!admin.name) admin.name = "Admin";
+        if (!admin.phone) admin.phone = "9999999999";
+        await admin.save();
+      } else {
+        admin = await User.findOne({ role: "admin" });
+        if (admin) {
+          admin.email = envAdminEmail;
+          admin.password = envAdminPassword;
+          admin.role = "admin";
+          if (!admin.name) admin.name = "Admin";
+          if (!admin.phone) admin.phone = "9999999999";
+          await admin.save();
+        } else {
+          admin = await User.create({
+            name: "Admin",
+            email: envAdminEmail,
+            phone: "9999999999",
+            password: envAdminPassword,
+            role: "admin",
+          });
+        }
+      }
+    } else {
+      admin = await User.findOne({
+        email: normalizedEmail,
+        role: { $in: ["owner", "admin", "viewer"] },
+      });
+      if (!admin) {
+        return res.status(401).json({ message: "Invalid email or password" });
+      }
+      if (admin.isActive === false) {
+        return res.status(403).json({ message: "This admin account is disabled." });
+      }
+
+      const isMatch = await admin.comparePassword(normalizedPassword);
+      if (!isMatch) {
+        return res.status(401).json({ message: "Invalid email or password" });
+      }
     }
 
     const token = jwt.sign(
@@ -39,7 +86,13 @@ async function handleAdminLogin(req, res) {
 
     return res.json({
       token,
-      admin: { id: admin._id, name: admin.name, email: admin.email },
+      admin: {
+        id: admin._id,
+        name: admin.name,
+        email: admin.email,
+        role: admin.role,
+        mustResetPassword: admin.mustResetPassword === true,
+      },
     });
   } catch (err) {
     console.error("admin/login error:", err);

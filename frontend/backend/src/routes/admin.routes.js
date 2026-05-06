@@ -13,11 +13,13 @@ const ShopProduct = require("../models/ShopProduct");
 const Service = require("../models/Service");
 const Slot = require("../models/Slot");
 const Booking = require("../models/Booking");
+const User = require("../models/User");
 const QuoteRequest = require("../models/QuoteRequest");
 const Review = require("../models/Review");
 const SitePresence = require("../models/SitePresence");
 const JobCard = require("../models/JobCard");
 const Inspection = require("../models/Inspection");
+const Employee = require("../models/Employee");
 const { buildJobSheetPdfBuffer } = require("../utils/jobSheetPdf");
 const { buildInvoicePdfBuffer } = require("../utils/invoicePdf");
 const { buildCustomerDirectory } = require("../utils/customerDirectory");
@@ -82,8 +84,14 @@ const uploadShopProductImage = multer({
   fileFilter: imageFileFilter,
 });
 
-const threadAttachmentDir = path.join(__dirname, "..", "..", "uploads", "public", "thread-attachments");
-fs.mkdirSync(threadAttachmentDir, { recursive: true });
+const threadAttachmentDir = process.env.VERCEL
+  ? path.join("/tmp", "thread-attachments")
+  : path.join(__dirname, "..", "..", "uploads", "public", "thread-attachments");
+try {
+  fs.mkdirSync(threadAttachmentDir, { recursive: true });
+} catch (e) {
+  console.error("threadAttachmentDir init failed:", e);
+}
 const threadAttachmentUpload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, threadAttachmentDir),
@@ -147,6 +155,399 @@ function renderMailCard({ eyebrow, title, intro, bodyHtml, ctaLabel, ctaHref, fo
 }
 
 router.use(protectAdmin);
+
+router.get("/account", async (req, res) => {
+  try {
+    const admin = await User.findOne({ _id: req.user?.id, role: "admin" }).select("_id name email");
+    if (!admin) return res.status(404).json({ message: "Admin account not found." });
+    return res.json({
+      id: String(admin._id),
+      name: admin.name || "Admin",
+      email: admin.email,
+    });
+  } catch (e) {
+    console.error("GET /admin/account", e);
+    return res.status(500).json({ message: "Could not load admin account." });
+  }
+});
+
+router.put("/account", async (req, res) => {
+  try {
+    const currentPassword = String(req.body?.currentPassword || "");
+    const nextEmailRaw = req.body?.email;
+    const nextPasswordRaw = req.body?.newPassword;
+    const nextEmail = typeof nextEmailRaw === "string" ? nextEmailRaw.trim().toLowerCase() : "";
+    const nextPassword = typeof nextPasswordRaw === "string" ? nextPasswordRaw.trim() : "";
+
+    if (!currentPassword) {
+      return res.status(400).json({ message: "Current password is required." });
+    }
+    if (!nextEmail && !nextPassword) {
+      return res.status(400).json({ message: "Provide a new email or a new password." });
+    }
+    if (nextEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) {
+      return res.status(400).json({ message: "Enter a valid email address." });
+    }
+    if (nextPassword && nextPassword.length < 8) {
+      return res.status(400).json({ message: "New password must be at least 8 characters." });
+    }
+
+    const admin = await User.findOne({ _id: req.user?.id, role: "admin" });
+    if (!admin) return res.status(404).json({ message: "Admin account not found." });
+
+    const ok = await admin.comparePassword(currentPassword);
+    if (!ok) return res.status(401).json({ message: "Current password is incorrect." });
+
+    if (nextEmail && nextEmail !== String(admin.email || "").toLowerCase()) {
+      const used = await User.findOne({
+        email: nextEmail,
+        _id: { $ne: admin._id },
+      }).select("_id");
+      if (used) {
+        return res.status(409).json({ message: "This email is already in use." });
+      }
+      admin.email = nextEmail;
+    }
+    if (nextPassword) {
+      admin.password = nextPassword;
+    }
+    await admin.save();
+
+    return res.json({
+      ok: true,
+      admin: {
+        id: String(admin._id),
+        name: admin.name || "Admin",
+        email: admin.email,
+      },
+      message: "Admin credentials updated. Please log in again.",
+    });
+  } catch (e) {
+    console.error("PUT /admin/account", e);
+    return res.status(500).json({ message: "Could not update admin account." });
+  }
+});
+
+router.get("/employees", async (_req, res) => {
+  try {
+    const rows = await Employee.find().sort({ isActive: -1, fullName: 1, createdAt: -1 }).lean();
+    return res.json({
+      items: rows.map((row) => ({
+        id: String(row._id),
+        name: row.name || row.fullName || "",
+        phone: row.phone || "",
+        email: row.email || "",
+        roleTitle: row.roleTitle || "",
+        joinedOn: row.joinedOn || "",
+        notes: row.notes || row.details || "",
+        monthlySalaryInr: Number.isFinite(Number(row.monthlySalaryInr)) ? Number(row.monthlySalaryInr) : 0,
+        salaryLedger: Array.isArray(row.salaryLedger) ? row.salaryLedger : [],
+        isActive: row.isActive !== false,
+        createdAt: row.createdAt || null,
+        updatedAt: row.updatedAt || null,
+      })),
+    });
+  } catch (e) {
+    console.error("GET /admin/employees", e);
+    return res.status(500).json({ message: "Could not load employees." });
+  }
+});
+
+router.post("/employees", async (req, res) => {
+  try {
+    const fullName = String(req.body?.name || req.body?.fullName || "").trim();
+    const phone = String(req.body?.phone || "").trim();
+    if (!fullName || !phone) {
+      return res.status(400).json({ message: "Name and phone are required." });
+    }
+    const monthlySalaryInrRaw = Number(req.body?.monthlySalaryInr);
+    if (!Number.isFinite(monthlySalaryInrRaw) || monthlySalaryInrRaw < 0) {
+      return res.status(400).json({ message: "monthlySalaryInr must be a non-negative number." });
+    }
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    const roleTitle = String(req.body?.roleTitle || "").trim();
+    const joinedOn = String(req.body?.joinedOn || "").trim();
+    const details = String(req.body?.details || req.body?.notes || "").trim();
+    const notes = String(req.body?.notes || req.body?.details || "").trim();
+    const employee = await Employee.create({
+      fullName,
+      name: fullName,
+      phone,
+      email,
+      roleTitle,
+      joinedOn,
+      details,
+      notes,
+      monthlySalaryInr: monthlySalaryInrRaw,
+      isActive: true,
+    });
+    return res.status(201).json({ id: String(employee._id) });
+  } catch (e) {
+    console.error("POST /admin/employees", e);
+    return res.status(500).json({ message: "Could not create employee." });
+  }
+});
+
+router.put("/employees/:id", async (req, res) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ message: "Invalid employee id." });
+    const employee = await Employee.findById(req.params.id);
+    if (!employee) return res.status(404).json({ message: "Employee not found." });
+    if (req.body?.name !== undefined || req.body?.fullName !== undefined) {
+      const nextName = String(req.body?.name || req.body?.fullName || "").trim();
+      employee.fullName = nextName;
+      employee.name = nextName;
+    }
+    if (req.body?.phone !== undefined) employee.phone = String(req.body.phone || "").trim();
+    if (req.body?.email !== undefined) employee.email = String(req.body.email || "").trim().toLowerCase();
+    if (req.body?.roleTitle !== undefined) employee.roleTitle = String(req.body.roleTitle || "").trim();
+    if (req.body?.joinedOn !== undefined) employee.joinedOn = String(req.body.joinedOn || "").trim();
+    if (req.body?.details !== undefined || req.body?.notes !== undefined) {
+      const nextDetails = String(req.body?.details || req.body?.notes || "").trim();
+      employee.details = nextDetails;
+      employee.notes = nextDetails;
+    }
+    if (req.body?.monthlySalaryInr !== undefined) {
+      const salary = Number(req.body.monthlySalaryInr);
+      if (!Number.isFinite(salary) || salary < 0) {
+        return res.status(400).json({ message: "monthlySalaryInr must be a non-negative number." });
+      }
+      employee.monthlySalaryInr = salary;
+    }
+    if (typeof req.body?.isActive === "boolean") employee.isActive = req.body.isActive;
+    await employee.save();
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("PUT /admin/employees/:id", e);
+    return res.status(500).json({ message: "Could not update employee." });
+  }
+});
+
+router.post("/employees/:id/salary", async (req, res) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ message: "Invalid employee id." });
+    const month = String(req.body?.month || "").trim();
+    if (!/^\d{4}-\d{2}$/.test(month)) {
+      return res.status(400).json({ message: "Month must be in YYYY-MM format." });
+    }
+    const amountInr = Math.max(0, Number(req.body?.amountInr || 0));
+    const status = ["paid", "partial", "unpaid"].includes(String(req.body?.status || ""))
+      ? String(req.body.status)
+      : "unpaid";
+    const paidOn = String(req.body?.paidOn || "").trim();
+    const note = String(req.body?.note || "").trim();
+    const employee = await Employee.findById(req.params.id);
+    if (!employee) return res.status(404).json({ message: "Employee not found." });
+    if (!Array.isArray(employee.salaryLedger)) employee.salaryLedger = [];
+    const idx = employee.salaryLedger.findIndex((row) => row.month === month);
+    const row = { month, amountInr, status, paidOn, note };
+    if (idx >= 0) employee.salaryLedger[idx] = row;
+    else employee.salaryLedger.push(row);
+    // Maintain backward-compatible simple paid marker fields.
+    if (status === "paid") {
+      employee.salaryPaidForMonth = month;
+      employee.salaryPaidAt = paidOn ? new Date(`${paidOn}T00:00:00.000Z`) : new Date();
+    } else if (employee.salaryPaidForMonth === month) {
+      employee.salaryPaidForMonth = "";
+      employee.salaryPaidAt = null;
+    }
+    await employee.save();
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("POST /admin/employees/:id/salary", e);
+    return res.status(500).json({ message: "Could not save salary status." });
+  }
+});
+
+router.patch("/employees/:id/salary", async (req, res) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ message: "Invalid employee id." });
+    const month = String(req.body?.month || "").trim();
+    const paid = req.body?.paid;
+    if (typeof paid !== "boolean") {
+      return res.status(400).json({ message: "paid must be a boolean." });
+    }
+    if (!/^\d{4}-\d{2}$/.test(month)) {
+      return res.status(400).json({ message: "Month must be in YYYY-MM format." });
+    }
+    const employee = await Employee.findById(req.params.id);
+    if (!employee) return res.status(404).json({ message: "Employee not found." });
+    if (paid) {
+      employee.salaryPaidForMonth = month;
+      employee.salaryPaidAt = new Date();
+    } else {
+      employee.salaryPaidForMonth = "";
+      employee.salaryPaidAt = null;
+    }
+    await employee.save();
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("PATCH /admin/employees/:id/salary", e);
+    return res.status(500).json({ message: "Could not save salary status." });
+  }
+});
+
+router.delete("/employees/:id", async (req, res) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ message: "Invalid employee id." });
+    const employee = await Employee.findById(req.params.id);
+    if (!employee) return res.status(404).json({ message: "Employee not found." });
+    employee.isActive = false;
+    await employee.save();
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("DELETE /admin/employees/:id", e);
+    return res.status(500).json({ message: "Could not remove employee access." });
+  }
+});
+
+router.get("/admins", async (_req, res) => {
+  try {
+    const rows = await User.find({ role: "admin" })
+      .sort({ createdAt: 1 })
+      .select("_id name email role isActive mustResetPassword createdAt updatedAt")
+      .lean();
+    return res.json({
+      items: rows.map((row) => ({
+        id: String(row._id),
+        name: row.name || "Admin",
+        email: row.email || "",
+        role: ["owner", "admin", "viewer"].includes(String(row.role || "")) ? row.role : "admin",
+        isActive: row.isActive !== false,
+        mustResetPassword: row.mustResetPassword === true,
+        createdAt: row.createdAt || null,
+        updatedAt: row.updatedAt || null,
+      })),
+    });
+  } catch (e) {
+    console.error("GET /admin/admins", e);
+    return res.status(500).json({ message: "Could not load admin users." });
+  }
+});
+
+router.post("/admins", async (req, res) => {
+  try {
+    const name = String(req.body?.name || "").trim() || "Admin";
+    const email = String(req.body?.email || "")
+      .trim()
+      .toLowerCase();
+    const password = String(req.body?.password || "").trim();
+    const role = ["owner", "admin", "viewer"].includes(String(req.body?.role || "")) ? String(req.body.role) : "admin";
+
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ message: "Enter a valid email address." });
+    }
+    if (password.length < 8) {
+      return res.status(400).json({ message: "Password must be at least 8 characters." });
+    }
+    const exists = await User.findOne({ email }).select("_id");
+    if (exists) {
+      return res.status(409).json({ message: "This email is already in use." });
+    }
+
+    const admin = await User.create({
+      name,
+      email,
+      phone: "9999999999",
+      password,
+      role,
+      isActive: true,
+      mustResetPassword: false,
+    });
+
+    return res.status(201).json({
+      id: String(admin._id),
+      name: admin.name || "Admin",
+      email: admin.email,
+      role: admin.role,
+    });
+  } catch (e) {
+    console.error("POST /admin/admins", e);
+    return res.status(500).json({ message: "Could not create admin user." });
+  }
+});
+
+router.put("/admins/:id", async (req, res) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: "Invalid admin id." });
+    }
+
+    const admin = await User.findOne({ _id: req.params.id, role: "admin" });
+    if (!admin) return res.status(404).json({ message: "Admin user not found." });
+
+    const nextNameRaw = req.body?.name;
+    const nextEmailRaw = req.body?.email;
+    const nextPasswordRaw = req.body?.newPassword;
+    const nextRoleRaw = req.body?.role;
+    const nextIsActiveRaw = req.body?.isActive;
+    const nextMustResetRaw = req.body?.mustResetPassword;
+    const nextName = typeof nextNameRaw === "string" ? nextNameRaw.trim() : "";
+    const nextEmail = typeof nextEmailRaw === "string" ? nextEmailRaw.trim().toLowerCase() : "";
+    const nextPassword = typeof nextPasswordRaw === "string" ? nextPasswordRaw.trim() : "";
+
+    const nextRole = ["owner", "admin", "viewer"].includes(String(nextRoleRaw || "")) ? String(nextRoleRaw) : "";
+    const hasIsActive = typeof nextIsActiveRaw === "boolean";
+    const hasMustReset = typeof nextMustResetRaw === "boolean";
+    if (!nextName && !nextEmail && !nextPassword && !nextRole && !hasIsActive && !hasMustReset) {
+      return res.status(400).json({ message: "Provide at least one change." });
+    }
+    if (nextEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) {
+      return res.status(400).json({ message: "Enter a valid email address." });
+    }
+    if (nextPassword && nextPassword.length < 8) {
+      return res.status(400).json({ message: "New password must be at least 8 characters." });
+    }
+
+    if (nextEmail && nextEmail !== String(admin.email || "").toLowerCase()) {
+      const used = await User.findOne({ email: nextEmail, _id: { $ne: admin._id } }).select("_id");
+      if (used) {
+        return res.status(409).json({ message: "This email is already in use." });
+      }
+      admin.email = nextEmail;
+    }
+    if (nextName) admin.name = nextName;
+    if (nextPassword) admin.password = nextPassword;
+    if (nextRole) admin.role = nextRole;
+    if (hasIsActive) admin.isActive = Boolean(nextIsActiveRaw);
+    if (hasMustReset) admin.mustResetPassword = Boolean(nextMustResetRaw);
+    await admin.save();
+
+    return res.json({
+      ok: true,
+      admin: {
+        id: String(admin._id),
+        name: admin.name || "Admin",
+        email: admin.email,
+        role: admin.role,
+        isActive: admin.isActive !== false,
+        mustResetPassword: admin.mustResetPassword === true,
+      },
+    });
+  } catch (e) {
+    console.error("PUT /admin/admins/:id", e);
+    return res.status(500).json({ message: "Could not update admin user." });
+  }
+});
+
+router.delete("/admins/:id", async (req, res) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: "Invalid admin id." });
+    }
+    const admin = await User.findOne({ _id: req.params.id, role: { $in: ["owner", "admin", "viewer"] } });
+    if (!admin) return res.status(404).json({ message: "Admin user not found." });
+    if (String(admin._id) === String(req.user?.id || "")) {
+      return res.status(400).json({ message: "You cannot remove your own admin account." });
+    }
+    admin.isActive = false;
+    await admin.save();
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("DELETE /admin/admins/:id", e);
+    return res.status(500).json({ message: "Could not remove admin access." });
+  }
+});
 
 /** Admin-controlled public support badge status (homepage: online/offline). */
 router.get("/site-presence", async (_req, res) => {

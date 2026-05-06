@@ -1,6 +1,6 @@
 {
   "name": "backend",
-  "version": "1.4.0",
+  "version": "5.0.0",
   "main": "src/app.js",
   "scripts": {
     "test:quote-email": "node scripts/test-quote-emails.js"

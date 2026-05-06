@@ -53,10 +53,35 @@ function IconUsers() {
   );
 }
 
+function IconBriefcase() {
+  return (
+    <svg className="h-5 w-5 shrink-0 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M20.25 14.25v-6A2.25 2.25 0 0 0 18 6h-3.621a.75.75 0 0 1-.53-.22l-.878-.88a2.25 2.25 0 0 0-1.591-.659H9.75A2.25 2.25 0 0 0 7.5 6v.75m12.75 7.5v3A2.25 2.25 0 0 1 18 19.5H6a2.25 2.25 0 0 1-2.25-2.25v-9A2.25 2.25 0 0 1 6 6h1.5m12.75 8.25H3.75m6.75-3v3m3-3v3"
+      />
+    </svg>
+  );
+}
+
 function IconHelp() {
   return (
     <svg className="h-5 w-5 shrink-0 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden>
       <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" />
+    </svg>
+  );
+}
+
+function IconSettings() {
+  return (
+    <svg className="h-5 w-5 shrink-0 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.592c.55 0 1.02.398 1.11.94l.213 1.276c.06.36.3.662.633.816.334.154.724.144 1.05-.03l1.144-.61a1.125 1.125 0 0 1 1.398.192l1.833 1.833c.39.39.463.994.192 1.398l-.61 1.144a1.125 1.125 0 0 0-.03 1.05c.154.334.456.573.816.633l1.276.213c.542.09.94.56.94 1.11v2.592c0 .55-.398 1.02-.94 1.11l-1.276.213a1.125 1.125 0 0 0-.816.633c-.154.334-.144.724.03 1.05l.61 1.144c.271.404.198 1.008-.192 1.398l-1.833 1.833a1.125 1.125 0 0 1-1.398.192l-1.144-.61a1.125 1.125 0 0 0-1.05-.03 1.125 1.125 0 0 0-.633.816l-.213 1.276c-.09.542-.56.94-1.11.94h-2.592c-.55 0-1.02-.398-1.11-.94l-.213-1.276a1.125 1.125 0 0 0-.633-.816 1.125 1.125 0 0 0-1.05.03l-1.144.61a1.125 1.125 0 0 1-1.398-.192L3.392 19.84a1.125 1.125 0 0 1-.192-1.398l.61-1.144c.174-.326.184-.716.03-1.05a1.125 1.125 0 0 0-.816-.633l-1.276-.213A1.125 1.125 0 0 1 .808 14.29v-2.592c0-.55.398-1.02.94-1.11l1.276-.213c.36-.06.662-.3.816-.633.154-.334.144-.724-.03-1.05l-.61-1.144a1.125 1.125 0 0 1 .192-1.398L5.225 4.317a1.125 1.125 0 0 1 1.398-.192l1.144.61c.326.174.716.184 1.05.03.334-.154.573-.456.633-.816l.144-.864Z"
+      />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
     </svg>
   );
 }
@@ -121,11 +146,13 @@ const items: NavItem[] = [
   { href: "/admin/slots", label: "Slots", icon: <IconClock /> },
   { href: "/admin/bookings", label: "Bookings", icon: <IconCalendar /> },
   { href: "/admin/customers", label: "Customers", icon: <IconUsers /> },
+  { href: "/admin/employees", label: "Employees", icon: <IconBriefcase /> },
   { href: "/admin/cars", label: "Cars", icon: <IconCar /> },
   { href: "/admin/quotes", label: "Quotes", icon: <IconDocument /> },
   { href: "/admin/enquiries", label: "Enquiries", icon: <IconChat /> },
   { href: "/admin/reviews", label: "Reviews", icon: <IconReviews /> },
   { href: "/admin/project-report", label: "Project report", icon: <IconDocument /> },
+  { href: "/admin/settings", label: "Settings", icon: <IconSettings /> },
 ];
 
 function navActive(href: string, pathname: string) {

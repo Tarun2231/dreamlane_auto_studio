@@ -6,20 +6,36 @@ const User = require("../models/User");
  */
 async function ensureDefaultAdmin() {
   try {
-    const count = await User.countDocuments({ role: "admin" });
-    if (count > 0) return;
-
     const email = process.env.ADMIN_EMAIL || "admin@carcare.com";
     const password = process.env.ADMIN_PASSWORD || "admin123";
+    const existingAdmin = await User.findOne({ role: "admin" });
 
-    await User.create({
-      name: "Admin",
-      email,
-      phone: "9999999999",
-      password,
-      role: "admin",
-    });
-    console.log(`[auth] Default admin user created: ${email}`);
+    if (!existingAdmin) {
+      await User.create({
+        name: "Admin",
+        email,
+        phone: "9999999999",
+        password,
+        role: "admin",
+      });
+      console.log(`[auth] Default admin user created: ${email}`);
+      return;
+    }
+
+    let changed = false;
+    if (existingAdmin.email !== email) {
+      existingAdmin.email = email;
+      changed = true;
+    }
+    const isSamePassword = await existingAdmin.comparePassword(password);
+    if (!isSamePassword) {
+      existingAdmin.password = password;
+      changed = true;
+    }
+    if (changed) {
+      await existingAdmin.save();
+      console.log(`[auth] Admin credentials synced from environment for: ${email}`);
+    }
   } catch (e) {
     console.error("[auth] Could not ensure default admin:", e.message);
   }

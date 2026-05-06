@@ -2,6 +2,7 @@ const path = require("path");
 const fs = require("fs");
 const dotenv = require("dotenv");
 const { MongoClient } = require("mongodb");
+const getMongoUris = require("./resolveMongoUri");
 
 function resolveBackendEnvPath() {
   const cwd = process.cwd();
@@ -21,28 +22,40 @@ if (!process.env.MONGO_URI) {
   }
 }
 
-const options = {};
+const options = {
+  connectTimeoutMS: 3000,
+  serverSelectionTimeoutMS: 3000,
+};
 let client;
 let clientPromise;
-const uri = process.env.MONGO_URI;
+let resolvedUri;
+
+const { primary: uri } = getMongoUris();
 
 if (!uri) {
   throw new Error("Please define the MONGO_URI environment variable");
 }
 
 async function createConnectionPromise() {
-  client = new MongoClient(uri, options);
-  try {
-    return await client.connect();
-  } catch (error) {
-    // Allow subsequent requests to retry instead of staying stuck on a rejected promise.
-    if (process.env.NODE_ENV === "development") {
-      global._mongoClientPromise = null;
-    } else {
-      clientPromise = null;
+  const { ordered } = getMongoUris();
+  let firstError = null;
+  for (const candidateUri of ordered) {
+    const candidateClient = new MongoClient(candidateUri, options);
+    try {
+      resolvedUri = candidateUri;
+      client = candidateClient;
+      return await candidateClient.connect();
+    } catch (error) {
+      if (!firstError) firstError = error;
     }
-    throw error;
   }
+  // Allow subsequent requests to retry instead of staying stuck on a rejected promise.
+  if (process.env.NODE_ENV === "development") {
+    global._mongoClientPromise = null;
+  } else {
+    clientPromise = null;
+  }
+  throw firstError || new Error("Could not connect to MongoDB.");
 }
 
 function getClientPromise() {
@@ -73,3 +86,4 @@ const thenableClientPromise = {
 };
 
 module.exports = thenableClientPromise;
+module.exports.getResolvedMongoUri = () => resolvedUri;
