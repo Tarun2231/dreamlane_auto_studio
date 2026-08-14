@@ -3,6 +3,8 @@ import { fetchServerApi } from "@/lib/api";
 import { Service } from "@/lib/types";
 import Link from "next/link";
 
+export const dynamic = "force-dynamic";
+
 async function getServices(): Promise<Service[]> {
   try {
     const res = await fetchServerApi("/services", { cache: "no-store" });

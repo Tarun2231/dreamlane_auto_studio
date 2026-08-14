@@ -4,6 +4,8 @@ import { fetchServerApi } from "@/lib/api";
 import { serviceImageIsRemoteHttp, serviceImageUrl } from "@/lib/images";
 import { Service } from "@/lib/types";
 
+export const dynamic = "force-dynamic";
+
 export default async function ServiceDetails({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   let service: Service | null = null;

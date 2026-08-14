@@ -14,6 +14,8 @@ import { fetchServerApi } from "@/lib/api";
 import { SITE_HOME_HERO_BADGES, SITE_NAME, SITE_SHORT, SITE_TAGLINE } from "@/lib/site";
 import { Service } from "@/lib/types";
 
+export const dynamic = "force-dynamic";
+
 const HOME_FEATURE_PILLS = [
   { title: "Live booking updates", body: "Track service progress and status in real time." },
   { title: "Transparent pricing", body: "Clear line-by-line quote with no hidden extras." },
