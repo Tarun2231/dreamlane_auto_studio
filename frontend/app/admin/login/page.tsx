@@ -2,7 +2,7 @@
 
 import axios from "axios";
 import Link from "next/link";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 
 export default function AdminLoginPage() {
@@ -11,6 +11,17 @@ export default function AdminLoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [isLocalhost, setIsLocalhost] = useState(true);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setIsLocalhost(
+        window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1" ||
+        window.location.hostname.endsWith(".local")
+      );
+    }
+  }, []);
 
   const fillCredentials = (fillEmail: string, fillPass: string) => {
     setEmail(fillEmail);
@@ -71,6 +82,16 @@ export default function AdminLoginPage() {
         <p className="mt-2 text-center text-sm text-slate-400">
           Sign in to manage services, slots, bookings, quotes, and team access.
         </p>
+
+        {/* Local Workshop Status Badge */}
+        <div className="mt-3 flex items-center justify-center">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-950/40 px-3 py-1 text-xs text-emerald-300">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            {isLocalhost
+              ? "Local Workshop Device (Localhost) — Active"
+              : "Live Website Host — Local Management Preferred"}
+          </span>
+        </div>
 
         {/* Demo Credentials Box */}
         <div className="mt-6 rounded-2xl border border-amber-500/30 bg-amber-950/20 p-4 shadow-lg backdrop-blur-md">

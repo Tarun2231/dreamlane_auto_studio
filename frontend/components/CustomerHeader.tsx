@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useShopCart } from "@/components/ShopCartProvider";
 import { useSiteLocation } from "@/components/SiteLocationProvider";
@@ -42,6 +42,18 @@ export default function CustomerHeader() {
   const { itemCount } = useShopCart();
   const { location, setLocation, options } = useSiteLocation();
 
+  const [isLocalhost, setIsLocalhost] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setIsLocalhost(
+        window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1" ||
+        window.location.hostname.endsWith(".local")
+      );
+    }
+  }, []);
+
   const linkClass = (href: string) =>
     `rounded-full px-4 py-2 text-sm font-medium transition ${
       navActive(pathnameValue, href)
@@ -50,17 +62,13 @@ export default function CustomerHeader() {
     }`;
 
   return (
-    <header className="customer-header shadow-sm shadow-black/5 dark:shadow-black/20">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3.5 md:py-4">
-        <Link
-          href="/"
-          className="group flex min-w-0 max-w-[min(100%,14rem)] flex-col leading-tight sm:max-w-none"
-          onClick={() => setOpen(false)}
-        >
-          <span className="text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-700 dark:text-amber-400">
+    <header className="sticky top-0 z-40 border-b border-black/5 bg-white/90 backdrop-blur-md dark:border-white/10 dark:bg-zinc-950/90">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:gap-4 sm:py-3.5">
+        <Link href="/" className="flex min-w-0 items-baseline gap-2 font-bold tracking-tight text-black dark:text-white">
+          <span className="truncate text-base sm:text-lg">{SITE_NAME}</span>
+          <span className="hidden shrink-0 text-xs font-normal text-gray-500 sm:inline dark:text-zinc-400">
             {SITE_SHORT}
           </span>
-          <span className="truncate text-lg font-bold tracking-tight">{SITE_NAME}</span>
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex">
@@ -84,12 +92,14 @@ export default function CustomerHeader() {
               </span>
             ) : null}
           </Link>
-          <Link
-            href="/admin/login"
-            className="ml-2 rounded-full border border-black/10 px-4 py-2 text-sm font-medium text-gray-800 hover:bg-black/5 dark:border-white/15 dark:text-zinc-200 dark:hover:bg-white/10"
-          >
-            Admin
-          </Link>
+          {isLocalhost ? (
+            <Link
+              href="/admin/login"
+              className="ml-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-900 hover:bg-amber-500/20 dark:border-amber-400/30 dark:text-amber-300 dark:hover:bg-amber-500/20"
+            >
+              Admin Panel
+            </Link>
+          ) : null}
         </nav>
 
         <div className="flex items-center gap-2">
@@ -157,13 +167,15 @@ export default function CustomerHeader() {
             >
               Cart{itemCount > 0 ? ` (${itemCount})` : ""}
             </Link>
-            <Link
-              href="/admin/login"
-              className="rounded-xl px-3 py-2 text-sm font-medium text-amber-800 dark:text-amber-300"
-              onClick={() => setOpen(false)}
-            >
-              Admin
-            </Link>
+            {isLocalhost ? (
+              <Link
+                href="/admin/login"
+                className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-900 dark:border-amber-400/30 dark:text-amber-300"
+                onClick={() => setOpen(false)}
+              >
+                Admin Panel
+              </Link>
+            ) : null}
           </nav>
         </div>
       )}
