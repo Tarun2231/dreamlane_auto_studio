@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 const path = require("path");
 const fs = require("fs");
 const dotenv = require("dotenv");
@@ -26,7 +27,6 @@ const options = {
   connectTimeoutMS: 3000,
   serverSelectionTimeoutMS: 3000,
 };
-let client;
 let clientPromise;
 let resolvedUri;
 

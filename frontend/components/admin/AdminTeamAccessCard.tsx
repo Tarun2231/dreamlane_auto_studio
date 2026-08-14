@@ -30,6 +30,15 @@ function formatWhen(value?: string | null) {
   return d.toLocaleString();
 }
 
+function getErrorMessage(err: unknown, fallback: string): string {
+  if (err && typeof err === "object" && "response" in err) {
+    const res = (err as { response?: { data?: { message?: string } } }).response;
+    if (res?.data?.message) return res.data.message;
+  }
+  if (err instanceof Error) return err.message;
+  return fallback;
+}
+
 export default function AdminTeamAccessCard() {
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string>("");
@@ -53,8 +62,8 @@ export default function AdminTeamAccessCard() {
     (async () => {
       try {
         await loadUsers();
-      } catch (e: any) {
-        if (!cancelled) setError(e?.response?.data?.message || "Could not load admin users.");
+      } catch (e: unknown) {
+        if (!cancelled) setError(getErrorMessage(e, "Could not load admin users."));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -110,8 +119,8 @@ export default function AdminTeamAccessCard() {
       setCreateRole("admin");
       await loadUsers();
       setMessage("Admin access added successfully.");
-    } catch (e: any) {
-      setError(e?.response?.data?.message || "Could not add admin user.");
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "Could not add admin user."));
     } finally {
       setCreating(false);
     }
@@ -159,8 +168,8 @@ export default function AdminTeamAccessCard() {
       }));
       await loadUsers();
       setMessage("Admin account updated.");
-    } catch (e: any) {
-      setError(e?.response?.data?.message || "Could not update admin user.");
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "Could not update admin user."));
     } finally {
       setSavingId("");
     }
@@ -176,8 +185,8 @@ export default function AdminTeamAccessCard() {
       await adminApi.delete(`admins/${id}`);
       await loadUsers();
       setMessage("Admin access removed (account disabled).");
-    } catch (e: any) {
-      setError(e?.response?.data?.message || "Could not remove admin access.");
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "Could not remove admin access."));
     } finally {
       setSavingId("");
     }

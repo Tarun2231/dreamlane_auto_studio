@@ -63,7 +63,6 @@ export default function CustomerBookingDetailModal({ bookingId, onClose }: Props
   }, [bookingId]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch when modal opens
     void load();
   }, [load]);
 

@@ -203,6 +203,7 @@ export default function AdminCommandPalette({ open, onOpenChange }: Props) {
                       <button
                         type="button"
                         role="option"
+                        aria-selected={false}
                         className="flex w-full flex-col rounded-lg px-3 py-2.5 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"
                         onClick={() => {
                           close();
@@ -216,6 +217,7 @@ export default function AdminCommandPalette({ open, onOpenChange }: Props) {
                       <Link
                         href={c.href}
                         role="option"
+                        aria-selected={false}
                         className="flex flex-col rounded-lg px-3 py-2.5 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"
                         onClick={() => close()}
                       >

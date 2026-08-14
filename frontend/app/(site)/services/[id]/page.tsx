@@ -1,13 +1,22 @@
 import Image from "next/image";
 import Link from "next/link";
-import { API_BASE } from "@/lib/api";
+import { fetchServerApi } from "@/lib/api";
 import { serviceImageIsRemoteHttp, serviceImageUrl } from "@/lib/images";
 import { Service } from "@/lib/types";
 
 export default async function ServiceDetails({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const res = await fetch(`${API_BASE}/services/${id}`, { cache: "no-store" });
-  if (!res.ok) {
+  let service: Service | null = null;
+  try {
+    const res = await fetchServerApi(`/services/${id}`, { cache: "no-store" });
+    if (res.ok) {
+      service = await res.json();
+    }
+  } catch {
+    service = null;
+  }
+
+  if (!service) {
     return (
       <main className="mx-auto flex max-w-4xl flex-1 flex-col items-center justify-center px-4 py-20 text-center">
         <h1 className="text-2xl font-bold">Service not found</h1>
@@ -23,7 +32,6 @@ export default async function ServiceDetails({ params }: { params: Promise<{ id:
       </main>
     );
   }
-  const service: Service = await res.json();
   const img = serviceImageUrl(service.image);
   const remoteImg = serviceImageIsRemoteHttp(img);
 

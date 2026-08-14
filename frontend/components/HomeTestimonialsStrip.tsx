@@ -1,11 +1,11 @@
 import { SITE_HOME_TESTIMONIALS } from "@/lib/site";
-import { API_BASE } from "@/lib/api";
+import { fetchServerApi } from "@/lib/api";
 
 type PublicReview = { id: string; quote: string; author: string; context: string };
 
 async function fetchApproved(): Promise<PublicReview[]> {
   try {
-    const res = await fetch(`${API_BASE}/reviews`, { cache: "no-store" });
+    const res = await fetchServerApi("/reviews", { cache: "no-store" });
     if (!res.ok) return [];
     return res.json();
   } catch {

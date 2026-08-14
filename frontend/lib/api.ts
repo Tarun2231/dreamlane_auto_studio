@@ -3,15 +3,51 @@ import axios from "axios";
 /**
  * API is served from Next.js at same-origin `/api/...` (Vercel-compatible).
  */
-const SERVER_API_BASE =
-  process.env.INTERNAL_API_BASE ||
-  process.env.NEXT_PUBLIC_API_BASE ||
-  `${process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || "http://127.0.0.1:3000"}/api`;
+export function getServerApiBase(): string {
+  if (process.env.INTERNAL_API_BASE) return process.env.INTERNAL_API_BASE.replace(/\/?$/, "");
+  if (process.env.NEXT_PUBLIC_API_BASE) return process.env.NEXT_PUBLIC_API_BASE.replace(/\/?$/, "");
+  const base = process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL;
+  if (base) return `${base.replace(/\/?$/, "")}/api`;
+  const port = process.env.PORT || "3000";
+  return `http://127.0.0.1:${port}/api`;
+}
 
-const SERVER_API_ROOT = SERVER_API_BASE.replace(/\/?$/, "/");
+const SERVER_API_BASE = getServerApiBase();
+const SERVER_API_ROOT = `${SERVER_API_BASE.replace(/\/?$/, "")}/`;
 
-/** Use in Server Components: `fetch(\`${API_BASE}/services\`)` */
+/** Use in Server Components: `fetchServerApi('/services')` or `fetch(\`${API_BASE}/services\`)` */
 export const API_BASE = SERVER_API_BASE;
+
+/**
+ * Resilient fetch helper for Server Components that handles dev port variations.
+ */
+export async function fetchServerApi(endpoint: string, init?: RequestInit): Promise<Response> {
+  const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+  const primaryBase = getServerApiBase();
+  const primaryUrl = `${primaryBase}${cleanEndpoint}`;
+
+  try {
+    const res = await fetch(primaryUrl, init);
+    return res;
+  } catch (error) {
+    if (
+      process.env.NODE_ENV === "development" &&
+      (primaryUrl.includes("127.0.0.1") || primaryUrl.includes("localhost"))
+    ) {
+      const fallbackPorts = ["3001", "3000", "3002"].filter((p) => !primaryUrl.includes(`:${p}`));
+      for (const fallbackPort of fallbackPorts) {
+        try {
+          const fallbackUrl = `http://127.0.0.1:${fallbackPort}/api${cleanEndpoint}`;
+          const res = await fetch(fallbackUrl, init);
+          return res;
+        } catch {
+          // continue fallback
+        }
+      }
+    }
+    throw error;
+  }
+}
 
 function normalizeUrl(url?: string) {
   if (!url) return url;

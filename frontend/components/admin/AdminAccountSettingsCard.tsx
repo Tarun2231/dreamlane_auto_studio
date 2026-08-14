@@ -10,6 +10,15 @@ type AdminAccount = {
   email: string;
 };
 
+function getErrorMessage(err: unknown, fallback: string): string {
+  if (err && typeof err === "object" && "response" in err) {
+    const res = (err as { response?: { data?: { message?: string } } }).response;
+    if (res?.data?.message) return res.data.message;
+  }
+  if (err instanceof Error) return err.message;
+  return fallback;
+}
+
 export default function AdminAccountSettingsCard() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -30,8 +39,8 @@ export default function AdminAccountSettingsCard() {
         if (cancelled) return;
         setAccount(res.data);
         setEmail(res.data.email || "");
-      } catch (e: any) {
-        if (!cancelled) setError(e?.response?.data?.message || "Could not load admin account.");
+      } catch (e: unknown) {
+        if (!cancelled) setError(getErrorMessage(e, "Could not load admin account."));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -76,8 +85,8 @@ export default function AdminAccountSettingsCard() {
       setConfirmPassword("");
       localStorage.removeItem("adminToken");
       setTimeout(() => router.replace("/admin/login"), 900);
-    } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to update credentials.");
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "Failed to update credentials."));
     } finally {
       setSaving(false);
     }

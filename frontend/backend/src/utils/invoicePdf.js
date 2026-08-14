@@ -6,7 +6,7 @@ function getInvoiceBrand() {
   const prefix = process.env.INVOICE_PREFIX || "INV";
   return {
     prefix,
-    garageName: process.env.JOB_SHEET_GARAGE_NAME || process.env.INVOICE_GARAGE_NAME || "Blackline Auto Studio",
+    garageName: process.env.JOB_SHEET_GARAGE_NAME || process.env.INVOICE_GARAGE_NAME || "Blacklane Auto Studio",
     tagline: process.env.JOB_SHEET_TAGLINE || process.env.INVOICE_TAGLINE || "Premium car care",
     location: process.env.JOB_SHEET_LOCATION || "—",
     phone: process.env.JOB_SHEET_PHONE || "—",

@@ -77,6 +77,19 @@ type ReportMeta = {
 
 type UiTheme = "professional" | "midnight" | "teal";
 type WorkspaceMode = "builder" | "analysis" | "board";
+type ProjectDraft = {
+  id: string;
+  name: string;
+  meta: ReportMeta;
+  form: FormState;
+  rows: MachineRow[];
+  uiTheme: UiTheme;
+  showOnlyWithLinks: boolean;
+  compactMachineRows: boolean;
+  presentationMode: boolean;
+  workspaceMode: WorkspaceMode;
+  scenario: { capexShockPct: number; revenueShockPct: number; costShockPct: number };
+};
 
 const emptyForm: FormState = {
   machineType: "",
@@ -127,6 +140,8 @@ const defaultMeta: ReportMeta = {
 };
 
 const STORAGE_KEY = "adminProjectReportDraftV1";
+const PROJECT_STORAGE_KEY = "adminProjectReportProjectsV1";
+const LAST_PROJECT_KEY = "adminProjectReportLastProjectIdV1";
 
 const MACHINE_TYPE_OPTIONS = [
   "AC recovery machine",
@@ -276,6 +291,9 @@ function toMachineCsv(rows: MachineRow[]) {
 }
 
 export default function AdminProjectReportPage() {
+  const [projects, setProjects] = useState<ProjectDraft[]>([]);
+  const [activeProjectId, setActiveProjectId] = useState<string>("");
+  const [newProjectName, setNewProjectName] = useState("");
   const [meta, setMeta] = useState<ReportMeta>(defaultMeta);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [rows, setRows] = useState<MachineRow[]>([]);
@@ -299,74 +317,93 @@ export default function AdminProjectReportPage() {
   const addMachineSectionRef = useRef<HTMLElement | null>(null);
   const machineListSectionRef = useRef<HTMLElement | null>(null);
 
+  const activeProject = useMemo(
+    () => projects.find((p) => p.id === activeProjectId) || null,
+    [projects, activeProjectId]
+  );
+
+  const snapshotCurrent = useMemo(
+    () => ({
+      meta,
+      form,
+      rows,
+      uiTheme,
+      showOnlyWithLinks,
+      compactMachineRows,
+      presentationMode,
+      workspaceMode,
+      scenario,
+    }),
+    [meta, form, rows, uiTheme, showOnlyWithLinks, compactMachineRows, presentationMode, workspaceMode, scenario]
+  );
+
+  function buildProjectDraft(name: string): ProjectDraft {
+    return {
+      id: crypto.randomUUID(),
+      name: name.trim() || `Project ${new Date().toLocaleDateString()}`,
+      meta: { ...defaultMeta, projectTitle: name.trim() || defaultMeta.projectTitle },
+      form: { ...emptyForm },
+      rows: [],
+      uiTheme: "professional",
+      showOnlyWithLinks: false,
+      compactMachineRows: false,
+      presentationMode: false,
+      workspaceMode: "builder",
+      scenario: { capexShockPct: 0, revenueShockPct: 0, costShockPct: 0 },
+    };
+  }
+
+  function hydrateFromProject(project: ProjectDraft) {
+    setMeta({ ...defaultMeta, ...project.meta });
+    setForm({ ...emptyForm, ...project.form });
+    setRows(Array.isArray(project.rows) ? project.rows : []);
+    setUiTheme(project.uiTheme || "professional");
+    setShowOnlyWithLinks(Boolean(project.showOnlyWithLinks));
+    setCompactMachineRows(Boolean(project.compactMachineRows));
+    setPresentationMode(Boolean(project.presentationMode));
+    setWorkspaceMode(project.workspaceMode || "builder");
+    setScenario(project.scenario || { capexShockPct: 0, revenueShockPct: 0, costShockPct: 0 });
+  }
+
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as {
-          meta?: ReportMeta;
-          form?: FormState;
-          rows?: MachineRow[];
-          uiTheme?: UiTheme;
-          showOnlyWithLinks?: boolean;
-          compactMachineRows?: boolean;
-          presentationMode?: boolean;
-          workspaceMode?: WorkspaceMode;
-          scenario?: { capexShockPct?: number; revenueShockPct?: number; costShockPct?: number };
+      const projectsRaw = localStorage.getItem(PROJECT_STORAGE_KEY);
+      if (projectsRaw) {
+        const parsedProjects = JSON.parse(projectsRaw) as ProjectDraft[];
+        if (Array.isArray(parsedProjects) && parsedProjects.length > 0) {
+          setProjects(parsedProjects);
+          const lastId = localStorage.getItem(LAST_PROJECT_KEY);
+          const initial = parsedProjects.find((p) => p.id === lastId) || parsedProjects[0];
+          setActiveProjectId(initial.id);
+          hydrateFromProject(initial);
+          return;
+        }
+      }
+      const legacyRaw = localStorage.getItem(STORAGE_KEY);
+      if (legacyRaw) {
+        const parsed = JSON.parse(legacyRaw) as Partial<ProjectDraft>;
+        const migrated: ProjectDraft = {
+          ...buildProjectDraft(parsed?.meta?.projectTitle || "Project 1"),
+          id: crypto.randomUUID(),
+          name: parsed?.meta?.projectTitle || "Project 1",
+          meta: { ...defaultMeta, ...(parsed.meta || {}) },
+          form: { ...emptyForm, ...(parsed.form || {}) },
+          rows: Array.isArray(parsed.rows) ? parsed.rows : [],
+          uiTheme: parsed.uiTheme || "professional",
+          showOnlyWithLinks: Boolean(parsed.showOnlyWithLinks),
+          compactMachineRows: Boolean(parsed.compactMachineRows),
+          presentationMode: Boolean(parsed.presentationMode),
+          workspaceMode: parsed.workspaceMode || "builder",
+          scenario: parsed.scenario || { capexShockPct: 0, revenueShockPct: 0, costShockPct: 0 },
         };
-        if (parsed.meta) setMeta({ ...defaultMeta, ...parsed.meta });
-        if (parsed.form) setForm({ ...emptyForm, ...parsed.form });
-        if (parsed.uiTheme === "professional" || parsed.uiTheme === "midnight" || parsed.uiTheme === "teal") {
-          setUiTheme(parsed.uiTheme);
-        }
-        if (typeof parsed.showOnlyWithLinks === "boolean") setShowOnlyWithLinks(parsed.showOnlyWithLinks);
-        if (typeof parsed.compactMachineRows === "boolean") setCompactMachineRows(parsed.compactMachineRows);
-        if (typeof parsed.presentationMode === "boolean") setPresentationMode(parsed.presentationMode);
-        if (parsed.workspaceMode === "builder" || parsed.workspaceMode === "analysis" || parsed.workspaceMode === "board") {
-          setWorkspaceMode(parsed.workspaceMode);
-        }
-        if (parsed.scenario) {
-          setScenario((prev) => ({
-            ...prev,
-            capexShockPct: Number.isFinite(Number(parsed.scenario?.capexShockPct)) ? Number(parsed.scenario?.capexShockPct) : prev.capexShockPct,
-            revenueShockPct: Number.isFinite(Number(parsed.scenario?.revenueShockPct)) ? Number(parsed.scenario?.revenueShockPct) : prev.revenueShockPct,
-            costShockPct: Number.isFinite(Number(parsed.scenario?.costShockPct)) ? Number(parsed.scenario?.costShockPct) : prev.costShockPct,
-          }));
-        }
-        if (Array.isArray(parsed.rows)) {
-          setRows(
-            parsed.rows.map((r) => ({
-              ...r,
-              qty: Number.isFinite(Number(r.qty)) && Number(r.qty) > 0 ? Math.round(Number(r.qty)) : 1,
-              priority:
-                r.priority === "critical" || r.priority === "important" || r.priority === "optional"
-                  ? r.priority
-                  : "critical",
-              productUrl: typeof r.productUrl === "string" ? r.productUrl : "",
-              imageUrl: typeof r.imageUrl === "string" ? r.imageUrl : "",
-              modelVariants:
-                Array.isArray((r as { modelVariants?: unknown[] }).modelVariants) &&
-                (r as { modelVariants?: Array<{ model?: string; price?: number }> }).modelVariants!.length > 0
-                  ? (r as { modelVariants: Array<{ model?: string; price?: number; link?: string }> }).modelVariants.map((mv) => ({
-                      model: String(mv?.model || "").trim(),
-                      price: Number.isFinite(Number(mv?.price)) ? Number(mv?.price) : 0,
-                      link: String(mv?.link || "").trim(),
-                    }))
-                  : [
-                      {
-                        model: String(r.machineModel || "").trim(),
-                        price: Number.isFinite(Number(r.chosenPrice)) ? Number(r.chosenPrice) : 0,
-                        link: String(r.productUrl || "").trim(),
-                      },
-                      {
-                        model: String(r.altMachineModel || "").trim(),
-                        price: Number.isFinite(Number(r.altMachineModelPrice)) ? Number(r.altMachineModelPrice) : 0,
-                        link: "",
-                      },
-                    ].filter((mv) => mv.model || mv.price > 0 || mv.link),
-            }))
-          );
-        }
+        setProjects([migrated]);
+        setActiveProjectId(migrated.id);
+        hydrateFromProject(migrated);
+      } else {
+        const starter = buildProjectDraft("Project 1");
+        setProjects([starter]);
+        setActiveProjectId(starter.id);
+        hydrateFromProject(starter);
       }
     } catch {
       // ignore corrupt draft
@@ -376,22 +413,96 @@ export default function AdminProjectReportPage() {
   }, []);
 
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || !activeProjectId) return;
+    setProjects((prev) => {
+      let changed = false;
+      const next = prev.map((p) => {
+        if (p.id !== activeProjectId) return p;
+        const same =
+          JSON.stringify({
+            meta: p.meta,
+            form: p.form,
+            rows: p.rows,
+            uiTheme: p.uiTheme,
+            showOnlyWithLinks: p.showOnlyWithLinks,
+            compactMachineRows: p.compactMachineRows,
+            presentationMode: p.presentationMode,
+            workspaceMode: p.workspaceMode,
+            scenario: p.scenario,
+          }) === JSON.stringify(snapshotCurrent);
+        if (same) return p;
+        changed = true;
+        return { ...p, ...snapshotCurrent };
+      });
+      if (changed) {
+        localStorage.setItem(PROJECT_STORAGE_KEY, JSON.stringify(next));
+      }
+      return changed ? next : prev;
+    });
+    localStorage.setItem(LAST_PROJECT_KEY, activeProjectId);
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
-        meta,
-        form,
-        rows,
-        uiTheme,
-        showOnlyWithLinks,
-        compactMachineRows,
-        presentationMode,
-        workspaceMode,
-        scenario,
+        ...snapshotCurrent,
       })
     );
-  }, [meta, form, rows, uiTheme, showOnlyWithLinks, compactMachineRows, presentationMode, workspaceMode, scenario, hydrated]);
+  }, [snapshotCurrent, hydrated, activeProjectId]);
+
+  const createProject = () => {
+    const next = buildProjectDraft(newProjectName || `Project ${projects.length + 1}`);
+    const merged = [next, ...projects];
+    setProjects(merged);
+    setActiveProjectId(next.id);
+    hydrateFromProject(next);
+    setNewProjectName("");
+    setMsg("New project created.");
+  };
+
+  const switchProject = (projectId: string) => {
+    const selected = projects.find((p) => p.id === projectId);
+    if (!selected) return;
+    setActiveProjectId(projectId);
+    hydrateFromProject(selected);
+    setMsg(`Switched to ${selected.name}.`);
+  };
+
+  const renameProject = (name: string) => {
+    if (!activeProjectId) return;
+    const clean = name.trim() || "Untitled project";
+    setProjects((prev) =>
+      prev.map((p) =>
+        p.id === activeProjectId ? { ...p, name: clean, meta: { ...p.meta, projectTitle: clean } } : p
+      )
+    );
+    setMeta((m) => ({ ...m, projectTitle: clean }));
+  };
+
+  const duplicateProject = () => {
+    if (!activeProject) return;
+    const copy: ProjectDraft = {
+      ...activeProject,
+      id: crypto.randomUUID(),
+      name: `${activeProject.name} (copy)`,
+      meta: { ...activeProject.meta, projectTitle: `${activeProject.meta.projectTitle} (copy)` },
+    };
+    setProjects((prev) => [copy, ...prev]);
+    setActiveProjectId(copy.id);
+    hydrateFromProject(copy);
+    setMsg("Project duplicated.");
+  };
+
+  const deleteProject = () => {
+    if (!activeProjectId || projects.length <= 1) {
+      setMsg("At least one project must remain.");
+      return;
+    }
+    const remaining = projects.filter((p) => p.id !== activeProjectId);
+    const next = remaining[0];
+    setProjects(remaining);
+    setActiveProjectId(next.id);
+    hydrateFromProject(next);
+    setMsg("Project deleted.");
+  };
 
   const totals = useMemo(() => {
     const machineCount = rows.length;
@@ -865,6 +976,59 @@ export default function AdminProjectReportPage() {
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
           Project report for service-center planning: machine comparison, capital requirement, and profitability overview.
         </p>
+        <div className="no-print mt-3 rounded-xl border border-zinc-200 bg-white/80 p-3 dark:border-zinc-700 dark:bg-zinc-900/50">
+          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Project workspace</p>
+          <div className="mt-2 grid gap-2 md:grid-cols-[220px_minmax(0,1fr)_auto_auto_auto]">
+            <select
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+              value={activeProjectId}
+              onChange={(e) => switchProject(e.target.value)}
+            >
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+            <input
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+              placeholder="New project name (e.g. EV Wash Bay Setup)"
+              value={newProjectName}
+              onChange={(e) => setNewProjectName(e.target.value)}
+            />
+            <button
+              type="button"
+              className="rounded-lg bg-zinc-900 px-3 py-2 text-xs font-semibold text-white dark:bg-zinc-100 dark:text-zinc-900"
+              onClick={createProject}
+            >
+              Create project
+            </button>
+            <button
+              type="button"
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200"
+              onClick={duplicateProject}
+            >
+              Duplicate
+            </button>
+            <button
+              type="button"
+              className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300"
+              onClick={deleteProject}
+            >
+              Delete
+            </button>
+          </div>
+          {activeProject ? (
+            <div className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+              Active project name:
+              <input
+                className="ml-2 w-[300px] max-w-full rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-700 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200"
+                value={activeProject.name}
+                onChange={(e) => renameProject(e.target.value)}
+              />
+            </div>
+          ) : null}
+        </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-7">
           <InfoCard label="Total units" value={String(totals.totalUnits)} />
           <InfoCard label="Machines" value={String(totals.machineCount)} />
@@ -1735,29 +1899,6 @@ function InfoCard({
       <p className="mt-1 text-xl font-bold text-zinc-900 dark:text-zinc-100">{value}</p>
       {hint ? <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">{hint}</p> : null}
     </button>
-  );
-}
-
-function NumberField({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <label className="block">
-      <span className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">{label}</span>
-      <input
-        type="number"
-        min={0}
-        className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
-    </label>
   );
 }
 

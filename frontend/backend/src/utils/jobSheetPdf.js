@@ -6,7 +6,7 @@ const Inspection = require("../models/Inspection");
 /** Branding — override via backend .env (see .env.example). */
 function getBrand() {
   return {
-    garageName: process.env.JOB_SHEET_GARAGE_NAME || "Blackline Auto Studio",
+    garageName: process.env.JOB_SHEET_GARAGE_NAME || "Blacklane Auto Studio",
     tagline: process.env.JOB_SHEET_TAGLINE || "Premium car detailing, restoration & performance care",
     location: process.env.JOB_SHEET_LOCATION || "—",
     phone: process.env.JOB_SHEET_PHONE || "—",

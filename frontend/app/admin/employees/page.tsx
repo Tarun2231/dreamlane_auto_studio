@@ -24,6 +24,15 @@ type Employee = {
   salaryLedger: SalaryRow[];
 };
 
+function getErrorMessage(err: unknown, fallback: string): string {
+  if (err && typeof err === "object" && "response" in err) {
+    const res = (err as { response?: { data?: { message?: string } } }).response;
+    if (res?.data?.message) return res.data.message;
+  }
+  if (err instanceof Error) return err.message;
+  return fallback;
+}
+
 const box = "rounded-xl border border-zinc-200/80 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900/50";
 
 function currentMonth() {
@@ -79,8 +88,8 @@ export default function AdminEmployeesPage() {
     (async () => {
       try {
         await load();
-      } catch (e: any) {
-        if (!cancelled) setError(e?.response?.data?.message || "Could not load employees.");
+      } catch (e: unknown) {
+        if (!cancelled) setError(getErrorMessage(e, "Could not load employees."));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -127,8 +136,8 @@ export default function AdminEmployeesPage() {
       setNotes("");
       await load();
       setMessage("Employee added.");
-    } catch (e: any) {
-      setError(e?.response?.data?.message || "Could not add employee.");
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "Could not add employee."));
     }
   }
 
@@ -145,8 +154,8 @@ export default function AdminEmployeesPage() {
       });
       await load();
       setMessage("Salary status updated.");
-    } catch (e: any) {
-      setError(e?.response?.data?.message || "Could not update salary.");
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "Could not update salary."));
     }
   }
 
@@ -157,8 +166,8 @@ export default function AdminEmployeesPage() {
       await adminApi.put(`/employees/${item.id}`, { isActive: !item.isActive });
       await load();
       setMessage("Employee status updated.");
-    } catch (e: any) {
-      setError(e?.response?.data?.message || "Could not update employee.");
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "Could not update employee."));
     }
   }
 
@@ -287,8 +296,8 @@ export default function AdminEmployeesPage() {
       );
       await load();
       setMessage(`Marked ${targets.length} employee salaries as paid for ${selectedMonth}.`);
-    } catch (e: any) {
-      setError(e?.response?.data?.message || "Could not mark all salaries as paid.");
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "Could not mark all salaries as paid."));
     } finally {
       setMarkAllBusy(false);
     }

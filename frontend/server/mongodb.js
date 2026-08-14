@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 const mongoose = require("mongoose");
 const ensureDefaultAdmin = require("../backend/src/bootstrap/ensureAdmin");
 const ensureDefaultServices = require("../backend/src/bootstrap/ensureDefaultServices");

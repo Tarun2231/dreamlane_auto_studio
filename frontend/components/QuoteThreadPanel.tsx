@@ -66,7 +66,6 @@ export default function QuoteThreadPanel({ quoteId, mode, customerEmail, onThrea
   }, [quoteId, mode, customerEmail]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial + poll loads thread
     void load();
   }, [load]);
 

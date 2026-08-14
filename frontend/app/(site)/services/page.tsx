@@ -1,12 +1,16 @@
 import ServicesGrid from "@/components/ServicesGrid";
-import { API_BASE } from "@/lib/api";
+import { fetchServerApi } from "@/lib/api";
 import { Service } from "@/lib/types";
 import Link from "next/link";
 
 async function getServices(): Promise<Service[]> {
-  const res = await fetch(`${API_BASE}/services`, { cache: "no-store" });
-  if (!res.ok) return [];
-  return res.json();
+  try {
+    const res = await fetchServerApi("/services", { cache: "no-store" });
+    if (!res.ok) return [];
+    return res.json();
+  } catch {
+    return [];
+  }
 }
 
 export default async function ServicesPage() {

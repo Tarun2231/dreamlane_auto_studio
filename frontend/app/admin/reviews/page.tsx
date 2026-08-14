@@ -69,7 +69,6 @@ export default function AdminReviewsPage() {
   }, [filter]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- async list fetch on mount / filter change
     void load();
   }, [load]);
 

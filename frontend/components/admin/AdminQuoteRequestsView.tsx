@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AdminVehicleSummary from "@/components/admin/AdminVehicleSummary";
 import QuoteThreadPanel from "@/components/QuoteThreadPanel";
 import { adminApi } from "@/lib/api";
@@ -119,7 +119,7 @@ export default function AdminQuoteRequestsView({ pageKind }: AdminQuoteRequestsV
   const [dateFrom, setDateFrom] = useState(() => ymdAddDays(ymdLocal(), -6));
   const [dateTo, setDateTo] = useState(() => ymdLocal());
   const [toastItems, setToastItems] = useState<AdminNotificationItem[]>([]);
-  const [knownNotifIds, setKnownNotifIds] = useState<Set<string>>(new Set());
+  const knownNotifIdsRef = useRef<Set<string>>(new Set());
 
   const isEnquiry = pageKind === "enquiry";
 
@@ -153,7 +153,7 @@ export default function AdminQuoteRequestsView({ pageKind }: AdminQuoteRequestsV
     if (nextQs === curQs) return;
     const base = pathname || (isEnquiry ? "/admin/enquiries" : "/admin/quotes");
     router.replace(nextQs ? `${base}?${nextQs}` : base);
-  }, [statusFilter, timePreset, dateFrom, dateTo, pathname, router, searchParams]);
+  }, [statusFilter, timePreset, dateFrom, dateTo, pathname, router, searchParams, isEnquiry]);
 
   const copyText = async (text: string, key: string) => {
     try {
@@ -218,17 +218,17 @@ export default function AdminQuoteRequestsView({ pageKind }: AdminQuoteRequestsV
         const relevant = all.filter((n) =>
           isEnquiry ? n.kind === "enquiry" || n.kind === "enquiry-message" : n.kind === "quotation" || n.kind === "quotation-message"
         );
-        setKnownNotifIds((prev) => {
-          if (prev.size === 0) return new Set(relevant.map((n) => n.id));
+        const prev = knownNotifIdsRef.current;
+        if (prev.size === 0) {
+          knownNotifIdsRef.current = new Set(relevant.map((n) => n.id));
+        } else {
           const fresh = relevant.filter((n) => !prev.has(n.id));
           if (fresh.length > 0) {
             setToastItems((cur) => [...fresh.slice(0, 3), ...cur].slice(0, 5));
             void load();
           }
-          const next = new Set(prev);
-          for (const n of relevant) next.add(n.id);
-          return next;
-        });
+          for (const n of relevant) prev.add(n.id);
+        }
       } catch {
         // ignore notification polling errors
       }

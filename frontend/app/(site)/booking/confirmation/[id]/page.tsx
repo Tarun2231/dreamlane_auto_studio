@@ -2,7 +2,7 @@ import Link from "next/link";
 import AddToCalendarButton from "@/components/AddToCalendarButton";
 import BookingIdCallout from "@/components/BookingIdCallout";
 import InvoiceDownloadCard from "@/components/InvoiceDownloadCard";
-import { API_BASE } from "@/lib/api";
+import { fetchServerApi } from "@/lib/api";
 import { Booking } from "@/lib/types";
 
 export default async function BookingConfirmation({
@@ -11,8 +11,17 @@ export default async function BookingConfirmation({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const res = await fetch(`${API_BASE}/booking/${id}`, { cache: "no-store" });
-  if (!res.ok) {
+  let booking: Booking | null = null;
+  try {
+    const res = await fetchServerApi(`/booking/${id}`, { cache: "no-store" });
+    if (res.ok) {
+      booking = await res.json();
+    }
+  } catch {
+    booking = null;
+  }
+
+  if (!booking) {
     return (
       <main className="mx-auto flex max-w-3xl flex-1 flex-col justify-center px-4 py-16">
         <div className="card space-y-4 p-8 text-center">
@@ -30,7 +39,6 @@ export default async function BookingConfirmation({
       </main>
     );
   }
-  const booking: Booking = await res.json();
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-10 md:py-14">

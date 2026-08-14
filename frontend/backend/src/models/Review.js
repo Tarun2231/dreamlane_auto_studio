@@ -6,7 +6,7 @@ const mongoose = require("mongoose");
  */
 const reviewSchema = new mongoose.Schema(
   {
-    bookingId: { type: mongoose.Schema.Types.ObjectId, ref: "Booking", required: true, index: true },
+    bookingId: { type: mongoose.Schema.Types.ObjectId, ref: "Booking", required: true },
     /** Shown on the site when approved */
     quote: { type: String, required: true, trim: true, minlength: 10, maxlength: 1200 },
     /** Display name, e.g. "Priya K." */

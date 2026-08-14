@@ -27,6 +27,16 @@ process.env.NODE_PATH = process.env.NODE_PATH
 moduleLib.Module._initPaths();
 const originalResolveFilename = moduleLib.Module._resolveFilename;
 moduleLib.Module._resolveFilename = function patchedResolve(request, parent, isMain, options) {
+  if (request === "mongoose") {
+    try {
+      return originalResolveFilename.call(this, "mongoose", parent, isMain, {
+        ...(options || {}),
+        paths: [frontendNodeModules, ...fallbackNodeModules],
+      });
+    } catch {
+      // fallback to standard resolution
+    }
+  }
   try {
     return originalResolveFilename.call(this, request, parent, isMain, options);
   } catch (error) {
@@ -69,6 +79,7 @@ function requireShared(modulePathInBackend) {
 const connectMongo = require("../../lib/mongodbMongoose");
 
 let cronStarted = false;
+let bootstrapped = false;
 let app = null;
 let startServiceReminderCron = null;
 
@@ -89,6 +100,17 @@ async function handler(req, res) {
   try {
     ensureBackendLoaded();
     await connectMongo();
+    if (!bootstrapped) {
+      try {
+        const ensureDefaultAdmin = requireShared("src/bootstrap/ensureAdmin");
+        const ensureDefaultServices = requireShared("src/bootstrap/ensureDefaultServices");
+        await ensureDefaultAdmin();
+        await ensureDefaultServices();
+      } catch (bootErr) {
+        console.warn("[bootstrap] Non-fatal bootstrap warning:", bootErr?.message || bootErr);
+      }
+      bootstrapped = true;
+    }
     if (!cronStarted) {
       startServiceReminderCron();
       cronStarted = true;

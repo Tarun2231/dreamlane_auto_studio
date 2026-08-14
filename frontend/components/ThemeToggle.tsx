@@ -1,6 +1,5 @@
 "use client";
 
-/* eslint-disable react-hooks/set-state-in-effect -- sync theme from storage on mount */
 import { useEffect, useState } from "react";
 
 const STORAGE_KEY = "carcare-theme";

@@ -10,7 +10,7 @@ import HowItWorksSection from "@/components/HowItWorksSection";
 import MaintenanceTipsSection from "@/components/MaintenanceTipsSection";
 import TrustFeatures from "@/components/TrustFeatures";
 import FaqSection from "@/components/FaqSection";
-import { API_BASE } from "@/lib/api";
+import { fetchServerApi } from "@/lib/api";
 import { SITE_HOME_HERO_BADGES, SITE_NAME, SITE_SHORT, SITE_TAGLINE } from "@/lib/site";
 import { Service } from "@/lib/types";
 
@@ -63,7 +63,7 @@ type SupportStatus = "online" | "offline" | "break";
 
 async function getServices(): Promise<Service[]> {
   try {
-    const res = await fetch(`${API_BASE}/services`, { cache: "no-store" });
+    const res = await fetchServerApi("/services", { cache: "no-store" });
     if (!res.ok) return [];
     return res.json();
   } catch {
@@ -73,7 +73,7 @@ async function getServices(): Promise<Service[]> {
 
 async function getSupportStatus(): Promise<SupportStatus> {
   try {
-    const res = await fetch(`${API_BASE}/site-presence`, { cache: "no-store" });
+    const res = await fetchServerApi("/site-presence", { cache: "no-store" });
     if (!res.ok) return "online";
     const data = (await res.json()) as { supportStatus?: string };
     return data.supportStatus === "offline" || data.supportStatus === "break" ? data.supportStatus : "online";
@@ -192,7 +192,7 @@ export default async function Home() {
               </ul>
             </div>
             <div className="mt-7 grid gap-2 sm:grid-cols-3">
-              {HOME_OPERATIONS_SNAPSHOT.map((item, idx) => (
+              {HOME_OPERATIONS_SNAPSHOT.map((item) => (
                 <div
                   key={item.label}
                   className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 backdrop-blur-sm transition duration-300 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.07]"
@@ -273,7 +273,7 @@ export default async function Home() {
               <span className="text-xs text-zinc-500 dark:text-zinc-400">Action-oriented modules</span>
             </div>
             <div className="mt-4 grid gap-3 md:grid-cols-3">
-              {HOME_PLAN_PROTECT.map((item, idx) => (
+              {HOME_PLAN_PROTECT.map((item) => (
                 <Link
                   key={item.title}
                   href={item.href}
