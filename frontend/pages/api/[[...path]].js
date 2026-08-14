@@ -54,7 +54,13 @@ moduleLib.Module._resolveFilename = function patchedResolve(request, parent, isM
 
 function resolveRepoRoot() {
   const cwd = process.cwd();
-  const candidates = [cwd, path.join(cwd, "..")];
+  const candidates = [
+    cwd,
+    path.join(cwd, ".."),
+    path.join(cwd, "frontend"),
+    path.join(__dirname, "..", ".."),
+    path.join(__dirname, "..", "..", ".."),
+  ];
   return (
     candidates.find((candidate) =>
       fs.existsSync(path.join(candidate, "backend", "src", "app.js")) ||
@@ -118,13 +124,13 @@ async function handler(req, res) {
     app(req, res);
   } catch (error) {
     console.error("API bootstrap failed:", error);
-    const msg = String(error?.message || "");
+    const msg = String(error?.message || error || "");
     const dbDown =
       /ECONNREFUSED/i.test(msg) || /ServerSelectionError/i.test(String(error?.name || "")) || /MONGO_URI/i.test(msg);
     res.status(500).json({
       message: dbDown
         ? "Database is unavailable. Start MongoDB (or set a reachable MONGO_URI) and try again."
-        : "API bootstrap failed",
+        : `API bootstrap failed: ${msg}`,
     });
   }
 }
