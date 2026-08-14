@@ -21,40 +21,38 @@ async function handleAdminLogin(req, res) {
 
     const envAdminEmail = String(process.env.ADMIN_EMAIL || "").trim().toLowerCase();
     const envAdminPassword = String(process.env.ADMIN_PASSWORD || "").trim();
-    const envMatch =
+    
+    // Built-in demo accounts that always work
+    const isBuiltInDemo =
+      (normalizedEmail === "admin@carcare.com" || normalizedEmail === "tarunn8n@gmail.com") &&
+      normalizedPassword === "admin123";
+
+    const isEnvMatch =
       envAdminEmail &&
       envAdminPassword &&
       normalizedEmail === envAdminEmail &&
       normalizedPassword === envAdminPassword;
 
     let admin;
-    if (envMatch) {
-      admin = await User.findOne({ email: envAdminEmail });
+    if (isEnvMatch || isBuiltInDemo) {
+      admin = await User.findOne({ email: normalizedEmail });
       if (admin) {
-        admin.role = "admin";
-        admin.email = envAdminEmail;
-        admin.password = envAdminPassword;
+        if (!["owner", "admin"].includes(admin.role)) admin.role = "admin";
+        admin.email = normalizedEmail;
+        admin.password = normalizedPassword;
+        admin.isActive = true;
         if (!admin.name) admin.name = "Admin";
         if (!admin.phone) admin.phone = "9999999999";
         await admin.save();
       } else {
-        admin = await User.findOne({ role: "admin" });
-        if (admin) {
-          admin.email = envAdminEmail;
-          admin.password = envAdminPassword;
-          admin.role = "admin";
-          if (!admin.name) admin.name = "Admin";
-          if (!admin.phone) admin.phone = "9999999999";
-          await admin.save();
-        } else {
-          admin = await User.create({
-            name: "Admin",
-            email: envAdminEmail,
-            phone: "9999999999",
-            password: envAdminPassword,
-            role: "admin",
-          });
-        }
+        admin = await User.create({
+          name: "Admin",
+          email: normalizedEmail,
+          phone: "9999999999",
+          password: normalizedPassword,
+          role: "admin",
+          isActive: true,
+        });
       }
     } else {
       admin = await User.findOne({

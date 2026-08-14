@@ -178,18 +178,43 @@ export default function AdminTeamAccessCard() {
   async function onRemove(id: string) {
     setError("");
     setMessage("");
-    const ok = window.confirm("Disable this admin account? They will no longer be able to log in.");
+    const ok = window.confirm("Disable this admin account? They will no longer be able to log in until re-enabled.");
     if (!ok) return;
     setSavingId(id);
     try {
       await adminApi.delete(`admins/${id}`);
       await loadUsers();
-      setMessage("Admin access removed (account disabled).");
+      setMessage("Admin account disabled.");
     } catch (e: unknown) {
-      setError(getErrorMessage(e, "Could not remove admin access."));
+      setError(getErrorMessage(e, "Could not disable admin access."));
     } finally {
       setSavingId("");
     }
+  }
+
+  async function onDeletePermanent(id: string, email: string) {
+    setError("");
+    setMessage("");
+    const ok = window.confirm(
+      `Permanently delete the admin credentials for "${email}"? This action cannot be undone.`
+    );
+    if (!ok) return;
+    setSavingId(id);
+    try {
+      await adminApi.delete(`admins/${id}?permanent=true`);
+      await loadUsers();
+      setMessage(`Admin credentials for ${email} permanently deleted.`);
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "Could not delete admin account."));
+    } finally {
+      setSavingId("");
+    }
+  }
+
+  function onCopyCredentials(email: string, role: string) {
+    const text = `Admin Portal Access\nURL: ${window.location.origin}/admin/login\nEmail: ${email}\nRole: ${role}`;
+    navigator.clipboard?.writeText(text);
+    setMessage(`Login details copied to clipboard for ${email}`);
   }
 
   return (
@@ -347,14 +372,33 @@ export default function AdminTeamAccessCard() {
                     Force reset
                   </label>
                 </div>
-                <div className="mt-2 flex items-center justify-between">
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">Admin ID: {item.id}</p>
-                  <div className="flex gap-2">
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-zinc-100 pt-2 dark:border-zinc-800">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                        d.isActive
+                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
+                          : "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
+                      }`}
+                    >
+                      {d.isActive ? "● Active" : "○ Disabled"}
+                    </span>
+                    <span className="text-xs text-zinc-500 dark:text-zinc-400">ID: {item.id}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onCopyCredentials(d.email, d.role)}
+                      className="rounded-lg border border-zinc-300 bg-zinc-50 px-2.5 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                      title="Copy login details to clipboard"
+                    >
+                      📋 Copy Details
+                    </button>
                     <button
                       type="button"
                       disabled={savingId === item.id || !userIds.has(item.id)}
                       onClick={() => onSave(item.id)}
-                      className="rounded-lg bg-amber-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {savingId === item.id ? "Saving..." : "Save changes"}
                     </button>
@@ -362,9 +406,19 @@ export default function AdminTeamAccessCard() {
                       type="button"
                       disabled={savingId === item.id}
                       onClick={() => onRemove(item.id)}
-                      className="rounded-lg bg-rose-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 disabled:opacity-50"
+                      title="Disable this account without deleting"
                     >
-                      Remove access
+                      {d.isActive ? "Disable" : "Re-enable"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={savingId === item.id}
+                      onClick={() => onDeletePermanent(item.id, d.email)}
+                      className="rounded-lg bg-rose-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-50"
+                      title="Permanently delete this user from database"
+                    >
+                      Delete
                     </button>
                   </div>
                 </div>

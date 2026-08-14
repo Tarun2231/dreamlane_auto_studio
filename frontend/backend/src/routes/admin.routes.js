@@ -403,7 +403,7 @@ router.delete("/employees/:id", async (req, res) => {
 
 router.get("/admins", async (_req, res) => {
   try {
-    const rows = await User.find({ role: "admin" })
+    const rows = await User.find({ role: { $in: ["owner", "admin", "viewer"] } })
       .sort({ createdAt: 1 })
       .select("_id name email role isActive mustResetPassword createdAt updatedAt")
       .lean();
@@ -473,7 +473,7 @@ router.put("/admins/:id", async (req, res) => {
       return res.status(400).json({ message: "Invalid admin id." });
     }
 
-    const admin = await User.findOne({ _id: req.params.id, role: "admin" });
+    const admin = await User.findOne({ _id: req.params.id, role: { $in: ["owner", "admin", "viewer"] } });
     if (!admin) return res.status(404).json({ message: "Admin user not found." });
 
     const nextNameRaw = req.body?.name;
@@ -540,9 +540,13 @@ router.delete("/admins/:id", async (req, res) => {
     if (String(admin._id) === String(req.user?.id || "")) {
       return res.status(400).json({ message: "You cannot remove your own admin account." });
     }
+    if (req.query?.permanent === "true") {
+      await User.deleteOne({ _id: admin._id });
+      return res.json({ ok: true, message: "Admin user permanently deleted." });
+    }
     admin.isActive = false;
     await admin.save();
-    return res.json({ ok: true });
+    return res.json({ ok: true, message: "Admin user disabled." });
   } catch (e) {
     console.error("DELETE /admin/admins/:id", e);
     return res.status(500).json({ message: "Could not remove admin access." });
