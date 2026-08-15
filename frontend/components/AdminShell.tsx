@@ -214,9 +214,17 @@ export default function AdminShell({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null | undefined>(undefined);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [isLocalhost, setIsLocalhost] = useState(true);
 
   useEffect(() => {
     setMounted(true);
+    if (typeof window !== "undefined") {
+      setIsLocalhost(
+        window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1" ||
+        window.location.hostname.endsWith(".local")
+      );
+    }
   }, []);
 
   useEffect(() => {
@@ -233,7 +241,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
   }, [pathname]);
 
   useEffect(() => {
-    if (!mounted || isLoginPage) return;
+    if (!mounted || isLoginPage || !isLocalhost) return;
     let currentToken = "";
     try {
       currentToken = localStorage.getItem("adminToken") || "";
@@ -243,7 +251,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
     if (!currentToken) {
       router.replace("/admin/login");
     }
-  }, [mounted, isLoginPage, router]);
+  }, [mounted, isLoginPage, isLocalhost, router]);
 
   useEffect(() => {
     if (!mobileNavOpen) return;
@@ -260,12 +268,53 @@ export default function AdminShell({ children }: { children: ReactNode }) {
     router.replace("/admin/login");
   };
 
-  if (isLoginPage) {
-    return <>{children}</>;
-  }
-
   if (!mounted) {
     return <AdminGateLoading />;
+  }
+
+  if (!isLocalhost) {
+    return (
+      <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-gradient-to-br from-slate-950 via-zinc-900 to-slate-950 px-4 py-12 text-center">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-amber-500/10 via-transparent to-transparent" />
+        <div className="relative mx-auto w-full max-w-lg rounded-3xl border border-amber-500/30 bg-black/60 p-8 shadow-2xl backdrop-blur-xl">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border border-amber-500/30 bg-amber-500/10 text-3xl shadow-inner">
+            🔒
+          </div>
+          <span className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-amber-300">
+            Offline Workshop Operations Only
+          </span>
+          <h1 className="mt-4 text-2xl font-bold text-white sm:text-3xl">Admin Console Is Offline</h1>
+          <p className="mt-3 text-sm leading-relaxed text-slate-300">
+            To ensure maximum security and privacy, this administrative control center is restricted to run only on your <strong>local workshop computer</strong>.
+          </p>
+          <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4 text-left text-xs text-slate-300">
+            <p className="font-semibold text-white">How to access your Admin Panel:</p>
+            <ol className="mt-2 list-decimal space-y-1.5 pl-4 text-slate-400">
+              <li>Open terminal on your local system and run: <code className="rounded bg-black/50 px-1.5 py-0.5 font-mono text-amber-300">npm run dev</code></li>
+              <li>Open your local workshop console: <strong className="text-white">http://localhost:3000/admin</strong></li>
+            </ol>
+          </div>
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
+            <Link
+              href="/"
+              className="inline-flex items-center justify-center rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-amber-400 shadow-lg shadow-amber-500/20 active:scale-95"
+            >
+              ← Return to Customer Website
+            </Link>
+            <Link
+              href="/services"
+              className="inline-flex items-center justify-center rounded-xl border border-white/15 bg-white/5 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-white/10"
+            >
+              Browse Services
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoginPage) {
+    return <>{children}</>;
   }
 
   if (token === undefined) {
