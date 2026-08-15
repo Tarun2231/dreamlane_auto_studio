@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { AdminSearchButton, requestOpenAdminCommandPalette } from "@/components/AdminCommandPalette";
 import AdminThemeToggle from "@/components/AdminThemeToggle";
+import AutomotiveBayBoard from "@/components/admin/AutomotiveBayBoard";
 import DashboardPeriodControls, { type DashboardPeriodType } from "@/components/admin/DashboardPeriodControls";
 import WorkshopFinancePanel from "@/components/admin/WorkshopFinancePanel";
 import WorkshopInsightsPanel, { type WorkshopInsights } from "@/components/admin/WorkshopInsightsPanel";
@@ -750,6 +751,9 @@ export default function AdminDashboardPage() {
           {error}
         </p>
       )}
+
+      {/* 5-Stage Automotive Bay Kanban & Interactive Lift Floorplan */}
+      <AutomotiveBayBoard />
 
       <WorkshopFinancePanel
         finance={stats?.insights?.finance}
