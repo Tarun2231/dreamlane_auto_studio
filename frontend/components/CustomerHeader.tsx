@@ -46,17 +46,7 @@ export default function CustomerHeader() {
   const [open, setOpen] = useState(false);
   const { itemCount } = useShopCart();
   const { location, setLocation, options } = useSiteLocation();
-  const [isLocalhost, setIsLocalhost] = useState(false);
 
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      setIsLocalhost(
-        window.location.hostname === "localhost" ||
-        window.location.hostname === "127.0.0.1" ||
-        window.location.hostname.endsWith(".local")
-      );
-    }
-  }, []);
 
   // Lock background scroll when mobile drawer is open
   useEffect(() => {
@@ -119,14 +109,13 @@ export default function CustomerHeader() {
               </span>
             ) : null}
           </Link>
-          {isLocalhost ? (
-            <Link
-              href="/admin/login"
-              className="ml-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-900 hover:bg-amber-500/20 dark:border-amber-400/30 dark:text-amber-300 dark:hover:bg-amber-500/20"
-            >
-              Admin Panel
-            </Link>
-          ) : null}
+          <Link
+            href="/admin/login"
+            className="ml-2 inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3.5 py-1.5 text-xs font-semibold text-amber-900 transition hover:bg-amber-500/20 dark:border-amber-400/30 dark:text-amber-300 dark:hover:bg-amber-500/20"
+          >
+            <ShieldCheck className="h-3.5 w-3.5" />
+            Admin
+          </Link>
         </nav>
 
         {/* Header Right Actions */}
@@ -310,19 +299,17 @@ export default function CustomerHeader() {
                 ) : null}
               </div>
 
-              {/* Admin Panel (Localhost) */}
-              {isLocalhost ? (
-                <div className="border-t border-black/5 pt-4 dark:border-white/10">
-                  <Link
-                    href="/admin/login"
-                    onClick={() => setOpen(false)}
-                    className="flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 text-sm font-semibold text-amber-900 transition hover:bg-amber-500/20 dark:border-amber-400/30 dark:text-amber-300"
-                  >
-                    <ShieldCheck className="h-4 w-4" />
-                    Admin Panel
-                  </Link>
-                </div>
-              ) : null}
+              {/* Admin Panel */}
+              <div className="border-t border-black/5 pt-4 dark:border-white/10">
+                <Link
+                  href="/admin/login"
+                  onClick={() => setOpen(false)}
+                  className="flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 text-sm font-semibold text-amber-900 transition hover:bg-amber-500/20 dark:border-amber-400/30 dark:text-amber-300"
+                >
+                  <ShieldCheck className="h-4 w-4" />
+                  Admin Panel
+                </Link>
+              </div>
             </div>
           </div>
         </div>

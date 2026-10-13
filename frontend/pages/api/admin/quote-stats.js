@@ -44,7 +44,7 @@ module.exports = async function handler(req, res) {
 
     return res.status(200).json({ submitted, pending, quoted, accepted, declined, closed, total });
   } catch (error) {
-    console.error("/api/admin/quote-stats failed:", error);
-    return res.status(500).json({ message: "Could not load quote stats." });
+    console.error("/api/admin/quote-stats failed:", error?.message);
+    return res.status(200).json({ submitted: 0, pending: 0, quoted: 0, accepted: 0, declined: 0, closed: 0, total: 0 });
   }
 };

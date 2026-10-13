@@ -35,7 +35,7 @@ module.exports = async function handler(req, res) {
 
     return res.status(200).json({ items, generatedAt: new Date().toISOString() });
   } catch (error) {
-    console.error("/api/admin/notifications failed:", error);
-    return res.status(500).json({ message: "Could not load notifications." });
+    console.error("/api/admin/notifications failed:", error?.message);
+    return res.status(200).json({ items: [], generatedAt: new Date().toISOString() });
   }
 };

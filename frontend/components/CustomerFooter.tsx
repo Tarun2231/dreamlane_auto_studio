@@ -9,6 +9,7 @@ const footerLinks = [
   { href: "/quote", label: "Get quote" },
   { href: "/booking", label: "Booking" },
   { href: "/booking/track", label: "Track booking" },
+  { href: "/admin/login", label: "Admin Portal" },
 ];
 
 export default function CustomerFooter() {
