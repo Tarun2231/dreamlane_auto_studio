@@ -29,6 +29,16 @@ input[type="submit"],
 input[type="button"],
 label[for] {
   touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Hide scrollbar for smooth horizontal touch swipe rows */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 /* iOS Safari: avoid auto-zoom on focus when inputs use small font sizes */

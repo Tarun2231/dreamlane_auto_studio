@@ -216,7 +216,7 @@ export default function ShopCheckoutPage() {
           </div>
           <button
             type="submit"
-            className="btn-primary w-full py-3 text-sm font-semibold disabled:opacity-50"
+            className="btn-primary w-full min-h-[48px] py-3.5 text-sm font-semibold shadow-md disabled:opacity-50"
             disabled={loading || !catalogReady || !!stockError}
           >
             {loading ? "Placing order…" : `Place order — ${formatInr(grand)}`}

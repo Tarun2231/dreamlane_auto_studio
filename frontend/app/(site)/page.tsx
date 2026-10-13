@@ -101,9 +101,9 @@ export default async function Home() {
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_70%_-10%,rgba(245,158,11,0.12),transparent)]" />
         <div className="pointer-events-none absolute -left-24 top-10 h-56 w-56 animate-pulse rounded-full bg-amber-500/20 blur-3xl" />
         <div className="pointer-events-none absolute -right-20 bottom-0 h-64 w-64 animate-pulse rounded-full bg-cyan-500/10 blur-3xl" />
-        <div className="relative mx-auto max-w-7xl px-3 py-16 sm:px-5 md:py-24 lg:py-28">
+        <div className="relative mx-auto max-w-7xl px-4 py-12 sm:px-6 md:py-24 lg:py-28">
           <div className="max-w-xl animate-fade-in-up lg:max-w-2xl">
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-amber-400/90">{SITE_SHORT}</p>
               <span
                 className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${
@@ -130,16 +130,16 @@ export default async function Home() {
                     : "Support offline"}
               </span>
             </div>
-            <h1 className="mt-3 text-[2rem] font-semibold leading-[1.15] tracking-tight text-white sm:text-4xl md:text-5xl md:leading-[1.1]">
+            <h1 className="mt-3 text-3xl font-extrabold leading-[1.15] tracking-tight text-white sm:text-4xl md:text-5xl md:leading-[1.1]">
               {SITE_NAME}
             </h1>
-            <p className="mt-4 max-w-lg text-base leading-relaxed text-zinc-400 md:text-lg">{SITE_TAGLINE}</p>
+            <p className="mt-3.5 max-w-lg text-sm leading-relaxed text-zinc-400 sm:text-base md:text-lg">{SITE_TAGLINE}</p>
             {SITE_HOME_HERO_BADGES.length > 0 ? (
-              <ul className="mt-5 flex flex-wrap gap-2" aria-label="Highlights">
+              <ul className="mt-4 flex flex-wrap gap-1.5 sm:gap-2" aria-label="Highlights">
                 {SITE_HOME_HERO_BADGES.map((label) => (
                   <li
                     key={label}
-                    className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-zinc-300"
+                    className="rounded-full border border-white/15 bg-white/5 px-2.5 py-0.5 text-[10px] sm:text-[11px] font-medium uppercase tracking-wide text-zinc-300"
                   >
                     {label}
                   </li>
@@ -150,32 +150,32 @@ export default async function Home() {
               {HOME_FEATURE_PILLS.map((item) => (
                 <li
                   key={item.title}
-                  className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-left backdrop-blur-sm transition duration-300 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.07]"
+                  className="rounded-xl border border-white/10 bg-white/[0.04] p-2.5 sm:px-3 sm:py-2 text-left backdrop-blur-sm transition duration-300 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.07]"
                 >
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-200">{item.title}</p>
                   <p className="mt-1 text-[11px] leading-relaxed text-zinc-400">{item.body}</p>
                 </li>
               ))}
             </ul>
-            <div className="mt-8 flex flex-col gap-4 sm:mt-10">
-              <div className="flex flex-wrap gap-3">
-                <Link href="/booking" className="btn-primary min-h-[44px] px-7 py-3 text-sm font-semibold shadow-lg shadow-black/20 transition hover:-translate-y-0.5">
+            <div className="mt-7 flex flex-col gap-3.5 sm:mt-10 sm:gap-4">
+              <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-3">
+                <Link href="/booking" className="btn-primary min-h-[46px] w-full sm:w-auto px-7 py-3 text-sm font-semibold shadow-lg shadow-black/20 transition hover:-translate-y-0.5 text-center">
                   Book now
                 </Link>
                 <Link
                   href="/services"
-                  className="inline-flex min-h-[44px] items-center justify-center rounded-full border border-white/20 bg-white px-7 py-3 text-sm font-semibold text-zinc-900 shadow-sm transition hover:-translate-y-0.5 hover:bg-zinc-100"
+                  className="inline-flex min-h-[46px] w-full sm:w-auto items-center justify-center rounded-full border border-white/20 bg-white px-7 py-3 text-sm font-semibold text-zinc-900 shadow-sm transition hover:-translate-y-0.5 hover:bg-zinc-100 text-center"
                 >
                   Browse services
                 </Link>
               </div>
               <Link
                 href="/quote"
-                className="text-sm font-medium text-zinc-500 transition hover:text-zinc-200"
+                className="text-sm font-medium text-zinc-400 transition hover:text-zinc-200"
               >
                 Need something custom? <span className="text-amber-400/90 underline decoration-amber-400/40 underline-offset-4">Get a quote</span>
               </Link>
-              <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 border-t border-white/10 pt-6 text-[13px] text-zinc-500">
+              <ul className="mt-6 flex flex-wrap gap-x-5 gap-y-2 border-t border-white/10 pt-5 text-xs sm:text-[13px] text-zinc-500">
                 <li>
                   <Link href="/booking/track" className="transition hover:text-zinc-200">
                     Track booking
@@ -193,15 +193,15 @@ export default async function Home() {
                 </li>
               </ul>
             </div>
-            <div className="mt-7 grid gap-2 sm:grid-cols-3">
+            <div className="mt-6 grid grid-cols-3 gap-2">
               {HOME_OPERATIONS_SNAPSHOT.map((item) => (
                 <div
                   key={item.label}
-                  className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 backdrop-blur-sm transition duration-300 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.07]"
+                  className="rounded-xl border border-white/10 bg-white/[0.04] p-2 sm:px-3 sm:py-2.5 backdrop-blur-sm transition duration-300 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.07] text-center"
                 >
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-400">{item.label}</p>
-                  <p className="mt-1 text-sm font-semibold text-white">{item.value}</p>
-                  <p className="text-[11px] text-zinc-500">{item.hint}</p>
+                  <p className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-[0.12em] sm:tracking-[0.16em] text-zinc-400 truncate">{item.label}</p>
+                  <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm font-semibold text-white">{item.value}</p>
+                  <p className="hidden xs:block mt-0.5 text-[10px] sm:text-[11px] text-zinc-500 truncate">{item.hint}</p>
                 </div>
               ))}
             </div>
@@ -221,7 +221,7 @@ export default async function Home() {
 
       <HowItWorksSection />
 
-      <main className="mx-auto w-full max-w-7xl space-y-16 px-3 py-16 sm:px-5 md:space-y-20 md:py-20">
+      <main className="mx-auto w-full max-w-7xl space-y-12 px-3 py-10 sm:px-5 sm:space-y-16 md:space-y-20 md:py-20">
         <RevealOnScroll delayMs={40}>
           <section className="rounded-2xl border border-zinc-200/70 bg-white/80 p-4 shadow-sm ring-1 ring-black/[0.02] dark:border-zinc-800 dark:bg-zinc-900/50 dark:ring-white/5 sm:p-5">
             <div className="grid gap-3 md:grid-cols-3">

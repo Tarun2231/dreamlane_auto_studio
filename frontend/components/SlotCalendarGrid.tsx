@@ -68,21 +68,21 @@ export default function SlotCalendarGrid({
           →
         </button>
       </div>
-      <div className="p-2">
+      <div className="p-1.5 sm:p-2">
         <div className="mb-2 grid grid-cols-7">
           {SLOT_WEEKDAYS.map((w) => (
             <div
               key={w}
-              className="py-1 text-center text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400"
+              className="py-1 text-center text-[10px] sm:text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400"
             >
               {w}
             </div>
           ))}
         </div>
-        <div className="grid grid-cols-7 gap-1">
+        <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
           {cells.map((day, i) => {
             if (day === null) {
-              return <div key={`e-${i}`} className="aspect-square min-h-[2.25rem]" />;
+              return <div key={`e-${i}`} className="aspect-square min-h-[2rem] sm:min-h-[2.25rem]" />;
             }
             const ymd = toYmd(viewY, viewM, day);
             const has = datesWithSlots.has(ymd);
@@ -95,7 +95,7 @@ export default function SlotCalendarGrid({
                 type="button"
                 disabled={!has}
                 onClick={() => has && onDayClick(ymd)}
-                className={`relative flex aspect-square min-h-[2.25rem] items-center justify-center rounded-xl text-sm font-medium transition ${
+                className={`relative flex aspect-square min-h-[2rem] sm:min-h-[2.25rem] items-center justify-center rounded-lg sm:rounded-xl text-xs sm:text-sm font-medium transition ${
                   !has
                     ? "cursor-not-allowed text-zinc-300 dark:text-zinc-600"
                     : isSelectedDay
@@ -106,13 +106,13 @@ export default function SlotCalendarGrid({
                 {day}
                 {dot === "emerald" && (
                   <span
-                    className="absolute bottom-1 h-1 w-1 rounded-full bg-emerald-500 dark:bg-emerald-400"
+                    className="absolute bottom-0.5 sm:bottom-1 h-1 w-1 rounded-full bg-emerald-500 dark:bg-emerald-400"
                     aria-hidden
                   />
                 )}
                 {dot === "amber" && (
                   <span
-                    className="absolute bottom-1 h-1 w-1 rounded-full bg-amber-500 dark:bg-amber-400"
+                    className="absolute bottom-0.5 sm:bottom-1 h-1 w-1 rounded-full bg-amber-500 dark:bg-amber-400"
                     aria-hidden
                   />
                 )}

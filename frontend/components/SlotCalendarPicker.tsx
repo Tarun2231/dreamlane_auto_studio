@@ -139,7 +139,7 @@ export default function SlotCalendarPicker({
           {timesForActive.length === 0 ? (
             <p className="text-sm text-zinc-500">No times for this day.</p>
           ) : (
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap">
               {timesForActive.map((slot) => {
                 const picked = selectedSlotId === slot._id;
                 return (
@@ -147,7 +147,7 @@ export default function SlotCalendarPicker({
                     key={slot._id}
                     type="button"
                     onClick={() => onSelectSlot(slot)}
-                    className={`min-h-[44px] min-w-[5.5rem] rounded-xl border px-4 py-2 font-mono text-sm font-semibold transition ${
+                    className={`min-h-[44px] w-full sm:w-auto sm:min-w-[5.5rem] rounded-xl border px-2 sm:px-4 py-2 font-mono text-xs sm:text-sm font-semibold transition text-center ${
                       picked
                         ? "border-amber-600 bg-amber-50 text-amber-950 shadow-sm dark:border-amber-500 dark:bg-amber-950/50 dark:text-amber-100"
                         : "border-zinc-200 bg-white text-zinc-900 hover:border-amber-400/80 hover:bg-amber-50/50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"

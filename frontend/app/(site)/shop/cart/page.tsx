@@ -100,37 +100,39 @@ export default function ShopCartPage() {
                     <p className="mt-1 text-sm">{formatInr(product.effectivePrice)} each</p>
                     <p className="mt-1 text-xs text-zinc-500">{shopStockLabel(product.stock)}</p>
                   </div>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <label className="flex items-center gap-2 text-sm">
-                      Qty
-                      <input
-                        type="number"
-                        min={1}
-                        max={shopStockMaxQty(product.stock)}
-                        className="w-16 rounded-lg border border-zinc-300 bg-white px-2 py-1 text-center dark:border-zinc-600 dark:bg-zinc-800"
-                        value={line.qty}
-                        onChange={(e) =>
-                          setQty(line.productId, Number(e.target.value), { maxQty: shopStockMaxQty(product.stock) })
-                        }
-                      />
-                    </label>
-                    <p className="min-w-[6rem] text-right font-semibold">{formatInr(lineTotal)}</p>
-                    <button
-                      type="button"
-                      className="text-sm text-red-600 hover:underline dark:text-red-400"
-                      onClick={() => remove(line.productId)}
-                    >
-                      Remove
-                    </button>
+                  <div className="flex items-center justify-between border-t border-zinc-100 pt-3 sm:border-t-0 sm:pt-0 sm:justify-end gap-4">
+                    <div className="flex items-center gap-3">
+                      <label className="flex items-center gap-1.5 text-xs sm:text-sm text-zinc-600 dark:text-zinc-400">
+                        Qty
+                        <input
+                          type="number"
+                          min={1}
+                          max={shopStockMaxQty(product.stock)}
+                          className="w-14 sm:w-16 rounded-xl border border-zinc-300 bg-white px-2 py-1.5 text-center text-sm font-semibold dark:border-zinc-600 dark:bg-zinc-800"
+                          value={line.qty}
+                          onChange={(e) =>
+                            setQty(line.productId, Number(e.target.value), { maxQty: shopStockMaxQty(product.stock) })
+                          }
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="text-xs sm:text-sm text-red-600 hover:underline dark:text-red-400"
+                        onClick={() => remove(line.productId)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    <p className="text-right font-bold tabular-nums text-base text-zinc-900 dark:text-zinc-100">{formatInr(lineTotal)}</p>
                   </div>
                 </li>
               ))}
             </ul>
-            <div className="flex items-center justify-between rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-700 dark:bg-zinc-800/50">
-              <span className="font-medium text-zinc-700 dark:text-zinc-200">Estimated total</span>
-              <span className="text-xl font-bold tabular-nums">{formatInr(grand)}</span>
+            <div className="flex items-center justify-between rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3.5 dark:border-zinc-700 dark:bg-zinc-800/50">
+              <span className="font-medium text-sm sm:text-base text-zinc-700 dark:text-zinc-200">Estimated total</span>
+              <span className="text-xl sm:text-2xl font-bold tabular-nums">{formatInr(grand)}</span>
             </div>
-            <Link href="/shop/checkout" className="btn-primary block w-full py-3 text-center text-sm font-semibold">
+            <Link href="/shop/checkout" className="btn-primary block w-full min-h-[48px] py-3.5 text-center text-sm font-semibold shadow-md">
               Proceed to checkout
             </Link>
           </div>

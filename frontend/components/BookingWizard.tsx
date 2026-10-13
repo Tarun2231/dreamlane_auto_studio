@@ -216,16 +216,16 @@ export default function BookingWizard() {
               />
             ))}
           </div>
-          <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[11px] font-medium text-gray-500 sm:grid-cols-4 sm:text-xs dark:text-zinc-500">
+          <div className="hidden sm:grid sm:grid-cols-4 gap-x-2 text-xs font-medium text-gray-500 dark:text-zinc-500">
             {stepLabels.map((label, i) => (
-              <span key={label} className={step === i + 1 ? "text-zinc-900 dark:text-white" : ""}>
+              <span key={label} className={step === i + 1 ? "text-zinc-900 font-semibold dark:text-white" : ""}>
                 {i + 1}. {label}
               </span>
             ))}
           </div>
         </div>
-        <p className="mb-6 text-sm font-medium text-gray-700 dark:text-zinc-300">
-          Step {step} of 4 — {stepLabels[step - 1]}
+        <p className="mb-6 text-sm font-semibold text-gray-800 dark:text-zinc-200">
+          Step {step} of 4: <span className="text-amber-800 dark:text-amber-400">{stepLabels[step - 1]}</span>
         </p>
           {step === 1 && (
             <div className="space-y-3">
@@ -424,10 +424,10 @@ export default function BookingWizard() {
             </div>
           )}
 
-          <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+          <div className="mt-8 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3">
             <button
               type="button"
-              className="min-h-11 rounded-full px-5 py-2.5 text-sm hover:bg-black/5 disabled:opacity-40 dark:hover:bg-white/10"
+              className="min-h-[44px] w-full sm:w-auto rounded-full border border-black/10 sm:border-transparent px-5 py-2.5 text-sm font-medium hover:bg-black/5 disabled:opacity-40 dark:border-white/15 dark:hover:bg-white/10 text-center"
               disabled={step === 1}
               onClick={() => {
                 setError(null);
@@ -439,7 +439,7 @@ export default function BookingWizard() {
             {step < 4 ? (
               <button
                 type="button"
-                className="btn-primary min-h-11 px-6 disabled:opacity-40"
+                className="btn-primary min-h-[46px] w-full sm:w-auto px-6 text-sm font-semibold disabled:opacity-40"
                 onClick={goNext}
                 disabled={!stepValid()}
               >
@@ -448,7 +448,7 @@ export default function BookingWizard() {
             ) : (
               <button
                 type="button"
-                className="btn-primary min-h-11 px-6 disabled:opacity-50"
+                className="btn-primary min-h-[46px] w-full sm:w-auto px-6 text-sm font-semibold disabled:opacity-50"
                 onClick={() => void submit()}
                 disabled={loading || !stepValid()}
               >
