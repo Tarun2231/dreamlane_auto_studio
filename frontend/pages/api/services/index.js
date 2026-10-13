@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
+const { getSupabase } = require("../../../lib/supabase");
 const clientPromise = require("../../../lib/mongodb");
 
 const SAMPLE_SERVICES = [
@@ -23,6 +24,36 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ message: "Method not allowed" });
   }
 
+  // 1. Attempt to fetch from Supabase first
+  try {
+    const supabase = getSupabase();
+    const { data: supaServices, error: supaErr } = await supabase
+      .from("services")
+      .select("*")
+      .eq("is_active", true)
+      .order("base_price", { ascending: true });
+
+    if (!supaErr && Array.isArray(supaServices) && supaServices.length > 0) {
+      return res.status(200).json(
+        supaServices.map((s) => ({
+          _id: s.id,
+          id: s.id,
+          name: s.name,
+          description: s.description,
+          price: s.base_price,
+          duration: `${s.duration} mins`,
+          image: s.image,
+          isActive: s.is_active,
+          createdAt: s.created_at,
+          updatedAt: s.updated_at,
+        }))
+      );
+    }
+  } catch (supaEx) {
+    // Supabase optional fallback
+  }
+
+  // 2. Fallback to MongoDB / Sample Services
   try {
     const client = await clientPromise;
     const dbName = process.env.MONGO_DB_NAME || "car-service";
@@ -51,7 +82,12 @@ module.exports = async function handler(req, res) {
       }))
     );
   } catch (error) {
-    console.error("GET /api/services failed:", error);
-    return res.status(500).json({ message: "Could not load services." });
+    // If both Supabase and MongoDB are not responding, return sample services so UI remains functional
+    return res.status(200).json(
+      SAMPLE_SERVICES.map((s, idx) => ({
+        ...s,
+        _id: `sample-${idx + 1}`,
+      }))
+    );
   }
 };
