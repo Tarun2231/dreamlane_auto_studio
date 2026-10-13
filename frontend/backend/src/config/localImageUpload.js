@@ -3,19 +3,18 @@ const fs = require("fs");
 const multer = require("multer");
 
 const UPLOAD_ROOT = process.env.VERCEL
-  ? path.join("/tmp", "uploads", "public")
-  : path.join(__dirname, "..", "..", "uploads", "public");
+  ? path.join(/*turbopackIgnore: true*/ "/tmp", "uploads", "public")
+  : path.join(/*turbopackIgnore: true*/ __dirname, "..", "..", "uploads", "public");
 
 function ensureDirs() {
   for (const d of ["service-images", "shop-products"]) {
     try {
-      fs.mkdirSync(path.join(UPLOAD_ROOT, d), { recursive: true });
+      fs.mkdirSync(path.join(/*turbopackIgnore: true*/ UPLOAD_ROOT, d), { recursive: true });
     } catch (e) {
       console.error("localImageUpload ensureDirs failed:", e);
     }
   }
 }
-ensureDirs();
 
 const limits = { fileSize: 5 * 1024 * 1024 };
 function imageFileFilter(req, file, cb) {
@@ -27,7 +26,10 @@ function imageFileFilter(req, file, cb) {
 
 function diskStorage(subfolder) {
   return multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, path.join(UPLOAD_ROOT, subfolder)),
+    destination: (_req, _file, cb) => {
+      ensureDirs();
+      cb(null, path.join(/*turbopackIgnore: true*/ UPLOAD_ROOT, subfolder));
+    },
     filename: (_req, file, cb) => {
       const ext = path.extname(file.originalname || "").toLowerCase();
       const allowed = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp"]);

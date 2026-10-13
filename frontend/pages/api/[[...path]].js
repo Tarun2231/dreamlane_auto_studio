@@ -1,99 +1,22 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 const path = require("path");
 const fs = require("fs");
-const runtimeRequire = eval("require");
-const moduleLib = require("module");
 const dotenv = require("dotenv");
-// Keep these static imports so Turbopack traces backend runtime deps into the serverless bundle.
-require("express");
-require("cors");
-require("morgan");
-require("nodemailer");
-require("multer");
-require("multer-storage-cloudinary");
-require("cloudinary");
-require("bcryptjs");
-require("jsonwebtoken");
-require("node-cron");
-require("pdfkit");
 
-const frontendNodeModules = path.join(process.cwd(), "node_modules");
-const parentNodeModules = path.join(process.cwd(), "..", "node_modules");
-const fallbackNodeModules = [frontendNodeModules, parentNodeModules];
-const fallbackNodePath = fallbackNodeModules.join(path.delimiter);
-process.env.NODE_PATH = process.env.NODE_PATH
-  ? `${fallbackNodePath}${path.delimiter}${process.env.NODE_PATH}`
-  : fallbackNodePath;
-moduleLib.Module._initPaths();
-const originalResolveFilename = moduleLib.Module._resolveFilename;
-moduleLib.Module._resolveFilename = function patchedResolve(request, parent, isMain, options) {
-  if (request === "mongoose") {
-    try {
-      return originalResolveFilename.call(this, "mongoose", parent, isMain, {
-        ...(options || {}),
-        paths: [frontendNodeModules, ...fallbackNodeModules],
-      });
-    } catch {
-      // fallback to standard resolution
-    }
-  }
-  try {
-    return originalResolveFilename.call(this, request, parent, isMain, options);
-  } catch (error) {
-    const isBareImport = typeof request === "string" && !request.startsWith(".") && !path.isAbsolute(request);
-    if (!isBareImport || error?.code !== "MODULE_NOT_FOUND") {
-      throw error;
-    }
-    const fallbackOptions = {
-      ...(options || {}),
-      paths: [...fallbackNodeModules, ...((options && options.paths) || [])],
-    };
-    return originalResolveFilename.call(this, request, parent, isMain, fallbackOptions);
-  }
-};
-
-function resolveRepoRoot() {
-  const cwd = process.cwd();
-  const candidates = [
-    cwd,
-    path.join(cwd, ".."),
-    path.join(cwd, "frontend"),
-    path.join(__dirname, "..", ".."),
-    path.join(__dirname, "..", "..", ".."),
-  ];
-  return (
-    candidates.find((candidate) =>
-      fs.existsSync(path.join(candidate, "backend", "src", "app.js")) ||
-      fs.existsSync(path.join(candidate, "frontend", "backend", "src", "app.js"))
-    ) || cwd
-  );
-}
-
-const repoRoot = resolveRepoRoot();
-const backendRoot = fs.existsSync(path.join(repoRoot, "backend", "src", "app.js"))
-  ? path.join(repoRoot, "backend")
-  : path.join(repoRoot, "frontend", "backend");
-const backendEnvPath = path.join(backendRoot, ".env");
+// Backend env file if present
+const backendEnvPath = path.join(__dirname, "../../backend/.env");
 if (fs.existsSync(backendEnvPath)) {
   dotenv.config({ path: backendEnvPath });
 }
 
-function requireShared(modulePathInBackend) {
-  return runtimeRequire(path.join(backendRoot, modulePathInBackend));
-}
-
 const connectMongo = require("../../lib/mongodbMongoose");
+const app = require("../../backend/src/app");
+const { startServiceReminderCron } = require("../../backend/src/jobs/serviceReminders");
+const ensureDefaultAdmin = require("../../backend/src/bootstrap/ensureAdmin");
+const ensureDefaultServices = require("../../backend/src/bootstrap/ensureDefaultServices");
 
 let cronStarted = false;
 let bootstrapped = false;
-let app = null;
-let startServiceReminderCron = null;
-
-function ensureBackendLoaded() {
-  if (app && startServiceReminderCron) return;
-  app = requireShared("src/app");
-  ({ startServiceReminderCron } = requireShared("src/jobs/serviceReminders"));
-}
 
 const config = {
   api: {
@@ -104,12 +27,9 @@ const config = {
 
 async function handler(req, res) {
   try {
-    ensureBackendLoaded();
     await connectMongo();
     if (!bootstrapped) {
       try {
-        const ensureDefaultAdmin = requireShared("src/bootstrap/ensureAdmin");
-        const ensureDefaultServices = requireShared("src/bootstrap/ensureDefaultServices");
         await ensureDefaultAdmin();
         await ensureDefaultServices();
       } catch (bootErr) {

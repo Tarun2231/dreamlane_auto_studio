@@ -29,20 +29,6 @@ async function connectMongo() {
             connectTimeoutMS: 5000,
             serverSelectionTimeoutMS: 5000,
           });
-          try {
-            const backendMongoosePath = require("path").join(process.cwd(), "backend", "node_modules", "mongoose");
-            if (require("fs").existsSync(backendMongoosePath)) {
-              const backendMongoose = eval("require")(backendMongoosePath);
-              if (backendMongoose !== mongoose && backendMongoose.connection.readyState !== 1) {
-                await backendMongoose.connect(candidateUri, {
-                  connectTimeoutMS: 5000,
-                  serverSelectionTimeoutMS: 5000,
-                });
-              }
-            }
-          } catch {
-            // non-fatal
-          }
           return conn;
         } catch (error) {
           if (!firstError) firstError = error;
