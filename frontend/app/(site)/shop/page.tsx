@@ -126,14 +126,14 @@ export default function ShopPage() {
           </div>
           <div>
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Product type</p>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex overflow-x-auto no-scrollbar gap-2 pb-1 sm:flex-wrap -mx-4 px-4 sm:mx-0 sm:px-0">
               {GROUP_TABS.map((t) => (
                 <button
                   key={t.id || "all"}
                   type="button"
                   title={t.hint}
                   onClick={() => setGroup(t.id)}
-                  className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                  className={`shrink-0 rounded-full px-4 py-2 text-xs sm:text-sm font-medium transition ${
                     group === t.id ? "bg-black text-white dark:bg-white dark:text-black" : "border border-black/10 dark:border-white/15"
                   }`}
                 >
@@ -144,11 +144,11 @@ export default function ShopPage() {
           </div>
           <div>
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Category</p>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex overflow-x-auto no-scrollbar gap-2 pb-1 sm:flex-wrap -mx-4 px-4 sm:mx-0 sm:px-0">
               <button
                 type="button"
                 onClick={() => setCategory("")}
-                className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                className={`shrink-0 rounded-full px-4 py-2 text-xs sm:text-sm font-medium transition ${
                   !category ? "bg-zinc-800 text-white dark:bg-zinc-200 dark:text-zinc-900" : "border border-black/10 dark:border-white/15"
                 }`}
               >
@@ -159,7 +159,7 @@ export default function ShopPage() {
                   key={c}
                   type="button"
                   onClick={() => setCategory(c)}
-                  className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                  className={`shrink-0 rounded-full px-4 py-2 text-xs sm:text-sm font-medium transition ${
                     category === c ? "bg-zinc-800 text-white dark:bg-zinc-200 dark:text-zinc-900" : "border border-black/10 dark:border-white/15"
                   }`}
                 >

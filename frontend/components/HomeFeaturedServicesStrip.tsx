@@ -47,21 +47,21 @@ export default function HomeFeaturedServicesStrip({ services }: { services: Serv
     <section className="relative overflow-hidden border-b border-zinc-200/70 bg-white dark:border-white/10 dark:bg-zinc-950" aria-labelledby="home-featured-services-heading">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-sky-100/35 to-transparent dark:from-sky-500/10" />
       <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 md:py-14">
-        <div className="mb-6 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-700/90 dark:text-amber-500/80">Services</p>
             <h2 id="home-featured-services-heading" className="mt-1 text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 md:text-2xl">
               Featured services
             </h2>
-            <p className="mt-1.5 max-w-md text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
-              Curated packages — search or scroll, then book a slot.
+            <p className="mt-1 max-w-md text-xs leading-relaxed text-zinc-500 sm:text-sm dark:text-zinc-400">
+              Curated packages — swipe to browse, then book a slot.
             </p>
           </div>
-          <div className="flex w-full min-w-0 flex-col gap-2 sm:max-w-lg md:w-auto md:max-w-xl md:flex-[1_1_22rem]">
+          <div className="flex w-full min-w-0 items-center gap-1.5 sm:max-w-xs md:max-w-sm">
             <label htmlFor="home-featured-services-search" className="sr-only">
               Search featured services
             </label>
-            <div className="flex items-center gap-1 rounded-2xl border border-zinc-200/90 bg-zinc-50/90 p-1 shadow-sm ring-1 ring-black/[0.03] dark:border-zinc-700 dark:bg-zinc-900/90 dark:ring-white/5">
+            <div className="flex flex-1 items-center rounded-2xl border border-zinc-200/90 bg-zinc-50/90 p-1 shadow-sm ring-1 ring-black/[0.03] dark:border-zinc-700 dark:bg-zinc-900/90 dark:ring-white/5">
               <input
                 id="home-featured-services-search"
                 type="search"
@@ -70,10 +70,12 @@ export default function HomeFeaturedServicesStrip({ services }: { services: Serv
                 placeholder="Search services…"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                className="min-h-10 min-w-0 flex-1 rounded-xl border-0 bg-transparent px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-0 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+                className="min-h-9 min-w-0 flex-1 rounded-xl border-0 bg-transparent px-3 py-1.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-0 dark:text-zinc-100 dark:placeholder:text-zinc-500"
               />
-              <Link href="/services" className="shrink-0 rounded-xl bg-zinc-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200">View all</Link>
             </div>
+            <Link href="/services" className="shrink-0 rounded-2xl bg-zinc-900 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200">
+              All
+            </Link>
           </div>
         </div>
 
@@ -89,9 +91,9 @@ export default function HomeFeaturedServicesStrip({ services }: { services: Serv
             </button>
           </div>
         ) : (
-          <div className="scrollbar-thin -mx-1 flex snap-x snap-mandatory gap-4 overflow-x-auto px-1 pb-3 pt-0.5 [scrollbar-width:thin] md:gap-5">
+          <div className="scrollbar-thin -mx-4 flex snap-x snap-mandatory gap-3.5 overflow-x-auto px-4 pb-3 pt-0.5 sm:-mx-2 sm:px-2 [scrollbar-width:thin] md:gap-5">
             {filtered.map((service) => (
-              <div key={service._id} className="w-[min(18rem,84vw)] shrink-0 snap-start">
+              <div key={service._id} className="w-[min(17rem,78vw)] shrink-0 snap-start">
                 <ServiceCard service={service} variant="strip" />
               </div>
             ))}

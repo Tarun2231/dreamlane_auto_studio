@@ -63,21 +63,21 @@ export default function HomeProductStrip() {
     >
       <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-amber-100/45 via-amber-50/20 to-transparent dark:from-amber-500/10 dark:via-transparent" />
       <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 md:py-14">
-        <div className="mb-6 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-700/90 dark:text-amber-500/80">Shop</p>
             <h2 id="home-shop-strip-heading" className="mt-1 text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 md:text-2xl">
               Products
             </h2>
-            <p className="mt-1.5 max-w-md text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
-              Accessories, machines &amp; more — scroll to browse, add to cart.
+            <p className="mt-1 max-w-md text-xs leading-relaxed text-zinc-500 sm:text-sm dark:text-zinc-400">
+              Accessories, machines &amp; more — swipe to browse, add to cart.
             </p>
           </div>
-          <div className="flex w-full min-w-0 flex-col gap-2 sm:max-w-lg md:w-auto md:max-w-xl md:flex-[1_1_22rem]">
+          <div className="flex w-full min-w-0 items-center gap-1.5 sm:max-w-xs md:max-w-sm">
             <label htmlFor="home-shop-strip-search" className="sr-only">
               Search shop products
             </label>
-            <div className="flex items-center gap-1 rounded-2xl border border-zinc-200/90 bg-white/95 p-1 shadow-sm ring-1 ring-black/[0.03] dark:border-zinc-700 dark:bg-zinc-900/95 dark:ring-white/5">
+            <div className="flex flex-1 items-center rounded-2xl border border-zinc-200/90 bg-white/95 p-1 shadow-sm ring-1 ring-black/[0.03] dark:border-zinc-700 dark:bg-zinc-900/95 dark:ring-white/5">
               <input
                 id="home-shop-strip-search"
                 type="search"
@@ -86,10 +86,12 @@ export default function HomeProductStrip() {
                 placeholder="Search products…"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                className="min-h-10 min-w-0 flex-1 rounded-xl border-0 bg-transparent px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-0 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+                className="min-h-9 min-w-0 flex-1 rounded-xl border-0 bg-transparent px-3 py-1.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-0 dark:text-zinc-100 dark:placeholder:text-zinc-500"
               />
-              <Link href="/shop" className="shrink-0 rounded-xl bg-zinc-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200">View all</Link>
             </div>
+            <Link href="/shop" className="shrink-0 rounded-2xl bg-zinc-900 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200">
+              All
+            </Link>
           </div>
         </div>
         {filtered.length === 0 ? (
@@ -104,11 +106,11 @@ export default function HomeProductStrip() {
             </button>
           </div>
         ) : (
-        <div className="scrollbar-thin -mx-1 flex snap-x snap-mandatory gap-4 overflow-x-auto px-1 pb-3 pt-0.5 [scrollbar-width:thin] md:gap-5">
+        <div className="scrollbar-thin -mx-4 flex snap-x snap-mandatory gap-3.5 overflow-x-auto px-4 pb-3 pt-0.5 sm:-mx-2 sm:px-2 [scrollbar-width:thin] md:gap-5">
           {filtered.map((p) => (
             <article
               key={p._id}
-              className="group relative flex w-[min(16.5rem,78vw)] shrink-0 snap-start flex-col overflow-hidden rounded-3xl border border-zinc-200/80 bg-white/95 shadow-sm ring-1 ring-black/[0.03] transition duration-300 hover:-translate-y-0.5 hover:border-zinc-300/90 hover:shadow-lg dark:border-zinc-700/80 dark:bg-zinc-900/95 dark:ring-white/5 dark:hover:border-zinc-600"
+              className="group relative flex w-[min(16rem,76vw)] shrink-0 snap-start flex-col overflow-hidden rounded-3xl border border-zinc-200/80 bg-white/95 shadow-sm ring-1 ring-black/[0.03] transition duration-300 hover:-translate-y-0.5 hover:border-zinc-300/90 hover:shadow-lg dark:border-zinc-700/80 dark:bg-zinc-900/95 dark:ring-white/5 dark:hover:border-zinc-600"
             >
               <Link
                 href={`/shop/${encodeURIComponent(p.slug)}`}

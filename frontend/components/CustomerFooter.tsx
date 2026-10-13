@@ -13,10 +13,10 @@ const footerLinks = [
 
 export default function CustomerFooter() {
   return (
-    <footer className="customer-footer mt-auto border-t border-black/10 py-12 dark:border-white/10">
-      <div className="mx-auto grid max-w-6xl gap-10 px-4 md:grid-cols-3">
+    <footer className="customer-footer mt-auto border-t border-black/10 py-10 sm:py-12 dark:border-white/10">
+      <div className="mx-auto grid max-w-6xl gap-8 px-4 sm:gap-10 sm:grid-cols-2 md:grid-cols-3">
         <div>
-          <p className="font-bold">{SITE_NAME}</p>
+          <p className="font-bold text-base sm:text-lg">{SITE_NAME}</p>
           <p className="mt-2 text-sm text-gray-600 dark:text-zinc-400">Premium car care &amp; online booking.</p>
         </div>
         <div>
@@ -56,15 +56,15 @@ export default function CustomerFooter() {
           </ul>
         </div>
       </div>
-      <div className="mx-auto mt-10 flex max-w-6xl flex-wrap items-center justify-between gap-4 border-t border-black/5 px-4 pt-8 dark:border-white/10">
-        <nav className="flex flex-wrap gap-4 text-sm">
+      <div className="mx-auto mt-8 sm:mt-10 flex max-w-6xl flex-col sm:flex-row items-center justify-between gap-4 border-t border-black/5 px-4 pt-6 sm:pt-8 dark:border-white/10">
+        <nav className="flex flex-wrap justify-center sm:justify-start gap-x-5 gap-y-2 text-sm">
           {footerLinks.map((l) => (
             <Link key={l.href} href={l.href} className="text-gray-700 underline-offset-4 hover:underline dark:text-zinc-300">
               {l.label}
             </Link>
           ))}
         </nav>
-        <p className="text-xs text-gray-500 dark:text-zinc-500">
+        <p className="text-xs text-center sm:text-left text-gray-500 dark:text-zinc-500">
           © {new Date().getFullYear()} {SITE_NAME}. All rights reserved.
         </p>
       </div>
