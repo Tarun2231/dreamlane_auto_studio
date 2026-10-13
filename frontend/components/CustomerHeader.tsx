@@ -77,7 +77,8 @@ export default function CustomerHeader() {
     }`;
 
   return (
-    <header className="sticky top-0 z-40 border-b border-black/5 bg-white/90 backdrop-blur-md dark:border-white/10 dark:bg-zinc-950/90">
+    <>
+      <header className="sticky top-0 z-40 border-b border-black/5 bg-white/90 backdrop-blur-md dark:border-white/10 dark:bg-zinc-950/90">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-2.5 sm:gap-4 sm:px-4 sm:py-3.5">
         {/* Brand */}
         <Link href="/" className="flex min-w-0 items-baseline gap-1.5 sm:gap-2 font-bold tracking-tight text-black dark:text-white">
@@ -165,22 +166,23 @@ export default function CustomerHeader() {
           </button>
         </div>
       </div>
+    </header>
 
-      {/* Mobile Drawer Overlay and Sheet */}
-      {open && (
-        <div className="fixed inset-0 z-50 md:hidden">
-          {/* Backdrop */}
-          <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
-            onClick={() => setOpen(false)}
-            aria-hidden="true"
-          />
+    {/* Mobile Drawer Overlay and Sheet - rendered outside header so backdrop-filter does NOT trap fixed positioning */}
+    {open && (
+      <div className="fixed inset-0 z-[100] md:hidden">
+        {/* Backdrop */}
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
+          onClick={() => setOpen(false)}
+          aria-hidden="true"
+        />
 
-          {/* Drawer Sheet */}
-          <div className="fixed right-0 top-0 bottom-0 flex w-[min(22rem,88vw)] flex-col bg-white shadow-2xl transition-transform dark:bg-zinc-950">
-            {/* Drawer Header */}
-            <div className="flex items-center justify-between border-b border-black/5 px-5 py-4 dark:border-white/10">
-              <span className="font-bold text-base text-zinc-900 dark:text-white">{SITE_NAME}</span>
+        {/* Drawer Sheet */}
+        <div className="fixed right-0 top-0 bottom-0 flex h-full w-[min(22rem,88vw)] max-w-full flex-col bg-white shadow-2xl transition-transform dark:bg-zinc-950">
+          {/* Drawer Header */}
+          <div className="flex h-16 shrink-0 items-center justify-between border-b border-black/5 px-5 dark:border-white/10">
+            <span className="font-bold text-base text-zinc-900 dark:text-white">{SITE_NAME}</span>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
@@ -314,6 +316,6 @@ export default function CustomerHeader() {
           </div>
         </div>
       )}
-    </header>
+    </>
   );
 }

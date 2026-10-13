@@ -1,5 +1,17 @@
-/* eslint-disable @typescript-eslint/no-require-imports */
-const { getSupabase } = require("../../../lib/supabase");
+let getSupabase = null;
+try {
+  getSupabase = require("../../../lib/supabase").getSupabase;
+} catch {
+  try {
+    const { createClient } = require("@supabase/supabase-js");
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://zjhlymssrpcawajhfpfg.supabase.co";
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "sb_publishable_VU8pJ3utws5oeU8meFcAHg_bstYju59";
+    const client = createClient(supabaseUrl, supabaseKey);
+    getSupabase = () => client;
+  } catch {
+    getSupabase = () => null;
+  }
+}
 const clientPromise = require("../../../lib/mongodb");
 
 const SAMPLE_SERVICES = [

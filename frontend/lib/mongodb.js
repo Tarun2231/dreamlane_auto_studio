@@ -27,23 +27,20 @@ const options = {
   connectTimeoutMS: 3000,
   serverSelectionTimeoutMS: 3000,
 };
-let clientPromise;
-let resolvedUri;
-
-const { primary: uri } = getMongoUris();
-
-if (!uri) {
-  throw new Error("Please define the MONGO_URI environment variable");
-}
+let clientPromise = null;
+let resolvedUri = null;
 
 async function createConnectionPromise() {
-  const { ordered } = getMongoUris();
+  const { ordered, primary } = getMongoUris();
+  if (!primary && (!ordered || ordered.length === 0)) {
+    throw new Error("MONGO_URI is not set");
+  }
   let firstError = null;
-  for (const candidateUri of ordered) {
+  for (const candidateUri of ordered || []) {
+    if (!candidateUri) continue;
     const candidateClient = new MongoClient(candidateUri, options);
     try {
       resolvedUri = candidateUri;
-      client = candidateClient;
       return await candidateClient.connect();
     } catch (error) {
       if (!firstError) firstError = error;
@@ -59,6 +56,10 @@ async function createConnectionPromise() {
 }
 
 function getClientPromise() {
+  const { primary, ordered } = getMongoUris();
+  if (!primary && (!ordered || ordered.length === 0)) {
+    return Promise.reject(new Error("MONGO_URI is not set"));
+  }
   if (process.env.NODE_ENV === "development") {
     if (!global._mongoClientPromise) {
       global._mongoClientPromise = createConnectionPromise();
