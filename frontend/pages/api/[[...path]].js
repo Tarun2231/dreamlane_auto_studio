@@ -27,30 +27,30 @@ const config = {
 
 async function handler(req, res) {
   try {
-    await connectMongo();
-    if (!bootstrapped) {
-      try {
-        await ensureDefaultAdmin();
-        await ensureDefaultServices();
-      } catch (bootErr) {
-        console.warn("[bootstrap] Non-fatal bootstrap warning:", bootErr?.message || bootErr);
+    try {
+      await connectMongo();
+      if (!bootstrapped) {
+        try {
+          await ensureDefaultAdmin();
+          await ensureDefaultServices();
+        } catch (bootErr) {
+          console.warn("[bootstrap] Non-fatal bootstrap warning:", bootErr?.message || bootErr);
+        }
+        bootstrapped = true;
       }
-      bootstrapped = true;
-    }
-    if (!cronStarted) {
-      startServiceReminderCron();
-      cronStarted = true;
+      if (!cronStarted) {
+        startServiceReminderCron();
+        cronStarted = true;
+      }
+    } catch (dbErr) {
+      console.warn("[API catch-all] MongoDB not connected:", dbErr?.message || dbErr);
     }
     app(req, res);
   } catch (error) {
-    console.error("API bootstrap failed:", error);
-    const msg = String(error?.message || error || "");
-    const dbDown =
-      /ECONNREFUSED/i.test(msg) || /ServerSelectionError/i.test(String(error?.name || "")) || /MONGO_URI/i.test(msg);
-    res.status(500).json({
-      message: dbDown
-        ? "Database is unavailable. Start MongoDB (or set a reachable MONGO_URI) and try again."
-        : `API bootstrap failed: ${msg}`,
+    console.error("API catch-all failed:", error);
+    res.status(404).json({
+      message: "API endpoint not found.",
+      path: req.url,
     });
   }
 }

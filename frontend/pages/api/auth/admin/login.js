@@ -31,6 +31,24 @@ module.exports = async function handler(req, res) {
       emailNorm === defaultAdminEmail &&
       password === defaultAdminPassword;
 
+    if (isDemoMatch || isEnvMatch) {
+      const admin = {
+        _id: "admin-master-id",
+        name: "Master Admin",
+        email: emailNorm,
+        role: "admin",
+      };
+      const token = jwt.sign(
+        { id: admin._id, email: admin.email, role: admin.role },
+        jwtSecret,
+        { expiresIn: "8h" }
+      );
+      return res.status(200).json({
+        token,
+        admin: { id: admin._id, name: admin.name, email: admin.email },
+      });
+    }
+
     let admin = null;
 
     try {
@@ -46,56 +64,23 @@ module.exports = async function handler(req, res) {
             return res.status(403).json({ message: "This admin account is disabled." });
           }
 
-          if (!isDemoMatch && !isEnvMatch) {
-            const hashed = String(admin.password || "");
-            const looksHashed = hashed.startsWith("$2a$") || hashed.startsWith("$2b$") || hashed.startsWith("$2y$");
-            const isMatch = looksHashed ? await bcrypt.compare(password, hashed) : password === hashed;
+          const hashed = String(admin.password || "");
+          const looksHashed = hashed.startsWith("$2a$") || hashed.startsWith("$2b$") || hashed.startsWith("$2y$");
+          const isMatch = looksHashed ? await bcrypt.compare(password, hashed) : password === hashed;
 
-            if (!isMatch) {
-              return res.status(401).json({ message: "Invalid email or password" });
-            }
-
-            // Transparently migrate legacy plaintext password records to bcrypt.
-            if (!looksHashed) {
-              const migratedHash = await bcrypt.hash(password, 10);
-              await users.updateOne({ _id: admin._id }, { $set: { password: migratedHash } });
-              admin.password = migratedHash;
-            }
+          if (!isMatch) {
+            return res.status(401).json({ message: "Invalid email or password" });
           }
-        } else if (isDemoMatch || isEnvMatch) {
-          const hashedPassword = await bcrypt.hash(password, 10);
-          const now = new Date();
-          await users.updateOne(
-            { email: emailNorm },
-            {
-              $set: {
-                name: "Admin",
-                email: emailNorm,
-                phone: "9999999999",
-                role: "admin",
-                isActive: true,
-                password: hashedPassword,
-                updatedAt: now,
-              },
-              $setOnInsert: { createdAt: now },
-            },
-            { upsert: true }
-          );
-          admin = await users.findOne({ email: emailNorm, role: "admin" });
+
+          if (!looksHashed) {
+            const migratedHash = await bcrypt.hash(password, 10);
+            await users.updateOne({ _id: admin._id }, { $set: { password: migratedHash } });
+            admin.password = migratedHash;
+          }
         }
       }
     } catch (dbErr) {
       console.warn("Database connection unavailable during admin login; validating credentials via fallback:", dbErr?.message);
-    }
-
-    // Fallback: If DB is unreachable or disconnected, but credentials match demo / env admin
-    if (!admin && (isDemoMatch || isEnvMatch)) {
-      admin = {
-        _id: "admin-master-id",
-        name: "Admin",
-        email: emailNorm,
-        role: "admin",
-      };
     }
 
     if (!admin) {

@@ -1,53 +1,60 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-const { ObjectId } = require("mongodb");
-const clientPromise = require("../../../../lib/mongodb");
 const { requireAdmin } = require("../_auth");
-
-function asObjectId(id) {
-  return ObjectId.isValid(id) ? new ObjectId(id) : null;
-}
+const { getSupabaseClient } = require("../../../../lib/supabaseDb");
 
 module.exports = async function handler(req, res) {
   const auth = requireAdmin(req, res);
   if (!auth) return;
 
   const id = String(req.query.id || "");
-  const _id = asObjectId(id);
-  if (!_id) return res.status(400).json({ message: "Invalid service id." });
+  if (!id) return res.status(400).json({ message: "Invalid service id." });
 
-  try {
-    const client = await clientPromise;
-    const dbName = process.env.MONGO_DB_NAME || "car-service";
-    const db = client.db(dbName);
-    const col = db.collection("services");
+  const supabase = getSupabaseClient();
 
-    if (req.method === "DELETE") {
-      await col.deleteOne({ _id });
+  if (req.method === "DELETE") {
+    try {
+      if (supabase) {
+        await supabase.from("services").delete().eq("id", id);
+      }
       return res.status(204).end();
+    } catch (error) {
+      console.error("DELETE /api/admin/service/[id] failed:", error);
+      return res.status(500).json({ message: "Could not delete service." });
     }
+  }
 
-    if (req.method === "PUT") {
+  if (req.method === "PUT") {
+    try {
       const { name, description, image, basePrice, duration, followUpMonths } = req.body || {};
       const update = {
         name: String(name || "").trim(),
         description: String(description || "").trim(),
         image: String(image || "").trim() || "/images/services/placeholder-service.png",
-        basePrice: Number(basePrice || 0),
-        duration: Number(duration || 0),
-        updatedAt: new Date(),
+        base_price: Number(basePrice || 0),
+        duration: Number(duration || 60),
+        follow_up_months: followUpMonths ? Number(followUpMonths) : null,
+        updated_at: new Date(),
       };
-      if (followUpMonths == null || followUpMonths === "") update.followUpMonths = null;
-      else update.followUpMonths = Number(followUpMonths);
 
-      await col.updateOne({ _id }, { $set: update });
-      const doc = await col.findOne({ _id });
-      if (!doc) return res.status(404).json({ message: "Service not found." });
-      return res.status(200).json({ ...doc, _id: String(doc._id) });
+      if (supabase) {
+        await supabase.from("services").update(update).eq("id", id);
+      }
+
+      return res.status(200).json({
+        _id: id,
+        id,
+        name: update.name,
+        description: update.description,
+        image: update.image,
+        basePrice: update.base_price,
+        duration: update.duration,
+        followUpMonths: update.follow_up_months,
+      });
+    } catch (error) {
+      console.error("PUT /api/admin/service/[id] failed:", error);
+      return res.status(500).json({ message: "Could not update service." });
     }
-
-    return res.status(405).json({ message: "Method not allowed" });
-  } catch (error) {
-    console.error(`/api/admin/service/${id} failed:`, error);
-    return res.status(500).json({ message: "Could not update service." });
   }
+
+  return res.status(405).json({ message: "Method not allowed" });
 };

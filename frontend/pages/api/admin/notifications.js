@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-const clientPromise = require("../../../lib/mongodb");
+const { listQuotes } = require("../../../lib/supabaseDb");
 const { requireAdmin } = require("./_auth");
 
 module.exports = async function handler(req, res) {
@@ -10,27 +10,14 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const client = await clientPromise;
-    const dbName = process.env.MONGO_DB_NAME || "car-service";
-    const db = client.db(dbName);
-    const limitRaw = Number(req.query.limit);
-    const limit = Math.min(120, Math.max(10, Number.isFinite(limitRaw) ? Math.floor(limitRaw) : 40));
-
-    const quoteRows = await db
-      .collection("quoterequests")
-      .find({})
-      .sort({ updatedAt: -1, createdAt: -1 })
-      .limit(limit)
-      .project({ _id: 1, customerName: 1, status: 1, updatedAt: 1, createdAt: 1 })
-      .toArray();
-
-    const items = quoteRows.map((q) => ({
-      id: `quote-${String(q._id)}`,
+    const quotes = await listQuotes();
+    const items = quotes.slice(0, 40).map((q) => ({
+      id: `quote-${String(q._id || q.id)}`,
       kind: "quotation",
       title: "Quote update",
       message: `${q.customerName || "Customer"} · ${q.status || "Updated"}`,
       href: "/admin/quotes",
-      at: (q.updatedAt || q.createdAt || new Date()).toISOString(),
+      at: q.updatedAt || q.createdAt || new Date().toISOString(),
     }));
 
     return res.status(200).json({ items, generatedAt: new Date().toISOString() });

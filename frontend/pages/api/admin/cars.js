@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-const clientPromise = require("../../../lib/mongodb");
+const { listBookings, listQuotes } = require("../../../lib/supabaseDb");
 const { requireAdmin } = require("./_auth");
 
 function validYmd(v) {
@@ -20,12 +20,6 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const client = await clientPromise;
-    const dbName = process.env.MONGO_DB_NAME || "car-service";
-    const db = client.db(dbName);
-    const bookingsCol = db.collection("bookings");
-    const quotesCol = db.collection("quoterequests");
-
     const limitRaw = Number(req.query.limit);
     const limit = Math.min(50, Math.max(1, Number.isFinite(limitRaw) ? Math.floor(limitRaw) : 10));
 
@@ -33,40 +27,23 @@ module.exports = async function handler(req, res) {
     const dt = validYmd(req.query.dateTo) ? String(req.query.dateTo) : null;
     const scoped = df && dt && df <= dt;
 
-    const bookingFind = { carMake: { $nin: [null, ""] }, carModel: { $nin: [null, ""] } };
-    if (scoped) bookingFind.date = { $gte: df, $lte: dt };
-    const quoteFind = { carMake: { $nin: [null, ""] }, carModel: { $nin: [null, ""] } };
-    if (scoped) {
-      quoteFind.createdAt = {
-        $gte: new Date(`${df}T00:00:00.000Z`),
-        $lte: new Date(`${dt}T23:59:59.999Z`),
-      };
-    }
-
-    const [bookings, quotes] = await Promise.all([
-      bookingsCol
-        .find(bookingFind)
-        .sort({ updatedAt: -1 })
-        .limit(250)
-        .project({ _id: 1, vehicleType: 1, carMake: 1, carModel: 1, vehicleYear: 1, customerName: 1, date: 1, updatedAt: 1 })
-        .toArray(),
-      quotesCol
-        .find(quoteFind)
-        .sort({ updatedAt: -1 })
-        .limit(250)
-        .project({
-          _id: 1,
-          vehicleType: 1,
-          carMake: 1,
-          carModel: 1,
-          vehicleYear: 1,
-          customerName: 1,
-          status: 1,
-          createdAt: 1,
-          updatedAt: 1,
-        })
-        .toArray(),
+    const [allBookings, allQuotes] = await Promise.all([
+      listBookings().catch(() => []),
+      listQuotes().catch(() => []),
     ]);
+
+    const bookings = allBookings.filter((b) => {
+      if (!b.carMake || !b.carModel) return false;
+      if (scoped && (b.date < df || b.date > dt)) return false;
+      return true;
+    });
+
+    const quotes = allQuotes.filter((q) => {
+      if (!q.carMake || !q.carModel) return false;
+      const ymd = (q.createdAt || "").slice(0, 10);
+      if (scoped && (ymd < df || ymd > dt)) return false;
+      return true;
+    });
 
     const bookSet = new Set();
     for (const b of bookings) {

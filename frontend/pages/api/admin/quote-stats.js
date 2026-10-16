@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-const clientPromise = require("../../../lib/mongodb");
+const { listQuotes } = require("../../../lib/supabaseDb");
 const { requireAdmin } = require("./_auth");
 
 function validYmd(v) {
@@ -14,33 +14,26 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const client = await clientPromise;
-    const dbName = process.env.MONGO_DB_NAME || "car-service";
-    const db = client.db(dbName);
-    const col = db.collection("quoterequests");
-
+    const allQuotes = await listQuotes();
     const df = validYmd(req.query.dateFrom) ? String(req.query.dateFrom) : null;
     const dt = validYmd(req.query.dateTo) ? String(req.query.dateTo) : null;
-    const scope =
-      df && dt && df <= dt
-        ? {
-            createdAt: {
-              $gte: new Date(`${df}T00:00:00.000Z`),
-              $lte: new Date(`${dt}T23:59:59.999Z`),
-            },
-          }
-        : {};
 
-    const count = (status) => col.countDocuments({ ...scope, status });
-    const [submitted, pending, quoted, accepted, declined, closed, total] = await Promise.all([
-      count("Submitted"),
-      count("Pending"),
-      count("Quoted"),
-      count("Accepted"),
-      count("Declined"),
-      count("Closed"),
-      col.countDocuments(scope),
-    ]);
+    const filtered = allQuotes.filter((q) => {
+      const ymd = (q.createdAt || "").slice(0, 10);
+      if (df && dt && df <= dt) {
+        return ymd >= df && ymd <= dt;
+      }
+      return true;
+    });
+
+    const count = (status) => filtered.filter((q) => (q.status || "").toLowerCase() === status.toLowerCase()).length;
+    const submitted = count("Submitted");
+    const pending = count("Pending");
+    const quoted = count("Quoted");
+    const accepted = count("Accepted");
+    const declined = count("Declined");
+    const closed = count("Closed");
+    const total = filtered.length;
 
     return res.status(200).json({ submitted, pending, quoted, accepted, declined, closed, total });
   } catch (error) {

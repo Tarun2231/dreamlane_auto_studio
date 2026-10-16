@@ -48,3 +48,7 @@ next-env.d.ts
 
 # root backend junction created during sync-next-build
 /backend
+
+# local fallback database files
+data/
+frontend/data/
