@@ -43,8 +43,9 @@ module.exports = async function handler(req, res) {
       const booking = await createBooking(payload);
       return res.status(201).json(booking);
     } catch (error) {
-      console.error("POST /api/booking error:", error);
-      return res.status(500).json({ message: "Could not create booking. Please try again." });
+      console.error("POST /api/booking error:", error?.message || error);
+      const status = error.statusCode || 500;
+      return res.status(status).json({ message: error.message || "Could not create booking. Please try again." });
     }
   }
 

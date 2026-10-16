@@ -50,6 +50,15 @@ export default function ServiceCard({ service, variant = "default" }: ServiceCar
         >
           ~{service.duration} min
         </span>
+        {service.isActive === false && (
+          <span
+            className={`absolute rounded-full bg-red-600/90 font-semibold text-white backdrop-blur-sm ${
+              strip ? "top-3 right-3 px-2.5 py-1 text-[10px]" : "top-3 right-3 px-3 py-1 text-xs"
+            }`}
+          >
+            Offline
+          </span>
+        )}
       </Link>
       <div className={`flex flex-1 flex-col ${strip ? "p-4" : "p-5"}`}>
         <h3 className={strip ? "line-clamp-2 text-[1.35rem] font-semibold leading-tight tracking-tight" : "text-lg font-bold tracking-tight"}>
@@ -73,16 +82,25 @@ export default function ServiceCard({ service, variant = "default" }: ServiceCar
           >
             Details
           </Link>
-          <Link
-            href={`/booking?serviceId=${service._id}`}
-            className={
-              strip
-                ? "rounded-full bg-zinc-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
-                : "rounded-full bg-zinc-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
-            }
-          >
-            Book
-          </Link>
+          {service.isActive === false ? (
+            <span
+              className="rounded-full bg-zinc-200 px-4 py-2 text-xs font-semibold text-zinc-500 cursor-not-allowed dark:bg-zinc-800 dark:text-zinc-500"
+              title="This service is currently unavailable for booking"
+            >
+              Offline
+            </span>
+          ) : (
+            <Link
+              href={`/booking?serviceId=${service._id}`}
+              className={
+                strip
+                  ? "rounded-full bg-zinc-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
+                  : "rounded-full bg-zinc-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
+              }
+            >
+              Book
+            </Link>
+          )}
         </div>
       </div>
     </article>

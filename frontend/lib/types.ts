@@ -58,6 +58,8 @@ export type Service = {
   duration: number;
   /** Months until next suggested visit (e.g. 12). Used for automated reminders. */
   followUpMonths?: number | null;
+  /** Online / availability status: true = available for booking, false = offline/unavailable */
+  isActive?: boolean;
 };
 
 export type Slot = {

@@ -50,15 +50,37 @@ export default async function ServiceDetails({ params }: { params: Promise<{ id:
           <span className="absolute bottom-4 left-4 rounded-full bg-black/65 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm">
             ~{service.duration} min
           </span>
+          {service.isActive === false && (
+            <span className="absolute top-4 right-4 rounded-full bg-red-600/90 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm">
+              Offline / Currently Unavailable
+            </span>
+          )}
         </div>
         <div className="space-y-4 p-6 md:p-8">
           <h1 className="text-3xl font-bold tracking-tight md:text-4xl">{service.name}</h1>
+          {service.isActive === false && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200">
+              <p className="font-semibold">Service Temporarily Unavailable</p>
+              <p className="mt-1 text-xs">This service has been set offline by administration and is not currently accepting new bookings.</p>
+            </div>
+          )}
           <p className="leading-relaxed text-gray-600 dark:text-zinc-400">{service.description}</p>
           <p className="text-sm text-gray-500 dark:text-zinc-500">Typical duration: {service.duration} minutes</p>
           <div className="flex flex-wrap gap-3 pt-2">
-            <Link href={`/booking?serviceId=${service._id}`} className="btn-primary">
-              Book this service
-            </Link>
+            {service.isActive === false ? (
+              <button
+                type="button"
+                disabled
+                className="btn-primary opacity-50 cursor-not-allowed"
+                title="This service is currently unavailable for booking"
+              >
+                Service Unavailable
+              </button>
+            ) : (
+              <Link href={`/booking?serviceId=${service._id}`} className="btn-primary">
+                Book this service
+              </Link>
+            )}
             <Link href="/services" className="btn-secondary">
               Back to list
             </Link>

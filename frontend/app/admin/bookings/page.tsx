@@ -11,8 +11,9 @@ type Inspection = {
   afterImages: { url: string }[];
 };
 
-function telHref(phone: string) {
-  return `tel:${phone.replace(/\s/g, "")}`;
+function telHref(phone?: string | null) {
+  if (!phone) return "#";
+  return `tel:${String(phone).replace(/\s/g, "")}`;
 }
 
 function formatInr(n: number) {
@@ -104,6 +105,8 @@ function BookingCustomerSummary({ booking }: { booking: Booking }) {
 function AdminBookingsPageContent() {
   const searchParams = useSearchParams();
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Booking | null>(null);
   const [inspection, setInspection] = useState<Inspection | null>(null);
   const [servicesDone, setServicesDone] = useState("");
@@ -172,17 +175,26 @@ function AdminBookingsPageContent() {
   }, [searchParams]);
 
   const load = useCallback(async () => {
-    const params: { date?: string; dateFrom?: string; dateTo?: string; status?: string; paymentStatus?: string } = {};
-    if (statusFilter) params.status = statusFilter;
-    if (paymentFilter) params.paymentStatus = paymentFilter;
-    if (dateFrom && dateTo) {
-      params.dateFrom = dateFrom;
-      params.dateTo = dateTo;
-    } else if (dateFrom) {
-      params.dateFrom = dateFrom;
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const params: { date?: string; dateFrom?: string; dateTo?: string; status?: string; paymentStatus?: string } = {};
+      if (statusFilter) params.status = statusFilter;
+      if (paymentFilter) params.paymentStatus = paymentFilter;
+      if (dateFrom && dateTo) {
+        params.dateFrom = dateFrom;
+        params.dateTo = dateTo;
+      } else if (dateFrom) {
+        params.dateFrom = dateFrom;
+      }
+      const res = await adminApi.get("/bookings", { params });
+      setBookings(Array.isArray(res.data) ? res.data : []);
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } };
+      setLoadError(err?.response?.data?.message || "Failed to load bookings from server.");
+    } finally {
+      setLoading(false);
     }
-    const res = await adminApi.get("/bookings", { params });
-    setBookings(res.data);
   }, [dateFrom, dateTo, statusFilter, paymentFilter]);
 
   useEffect(() => {
@@ -252,18 +264,23 @@ function AdminBookingsPageContent() {
   const openDetails = async (booking: Booking) => {
     setJobCardMsg(null);
     setSelected(booking);
-    const [jobCardRes, inspectionRes] = await Promise.all([
-      adminApi.get(`/job-card/${booking._id}`),
-      adminApi.get(`/inspection/${booking._id}`),
-    ]);
-    const jobCard = jobCardRes.data;
-    setInspection(inspectionRes.data);
-    setServicesDone((jobCard?.servicesDone || []).join(", "));
-    setPartsUsed((jobCard?.partsUsed || []).join(", "));
-    setExtraCharges(storedAmountToInput(jobCard?.extraCharges));
-    setPartsCostInr(storedAmountToInput(jobCard?.partsCostInr));
-    setMiscCostsInr(storedAmountToInput(jobCard?.miscCostsInr));
-    setNotes(jobCard?.notes || "");
+    try {
+      const [jobCardRes, inspectionRes] = await Promise.allSettled([
+        adminApi.get(`/job-card/${booking._id}`),
+        adminApi.get(`/inspection/${booking._id}`),
+      ]);
+      const jobCard = jobCardRes.status === "fulfilled" ? jobCardRes.value.data : null;
+      const insp = inspectionRes.status === "fulfilled" ? inspectionRes.value.data : null;
+      setInspection(insp);
+      setServicesDone((jobCard?.servicesDone || []).join(", "));
+      setPartsUsed((jobCard?.partsUsed || []).join(", "));
+      setExtraCharges(storedAmountToInput(jobCard?.extraCharges));
+      setPartsCostInr(storedAmountToInput(jobCard?.partsCostInr));
+      setMiscCostsInr(storedAmountToInput(jobCard?.miscCostsInr));
+      setNotes(jobCard?.notes || "");
+    } catch {
+      // Sub-resource loading fallback
+    }
     setFinalAmountInput(
       booking.finalAmount != null && booking.finalAmount > 0 ? String(booking.finalAmount) : ""
     );
@@ -459,96 +476,120 @@ function AdminBookingsPageContent() {
           {statusMsg}
         </p>
       )}
+      {loadError && (
+        <div className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+          <span>{loadError}</span>
+          <button
+            type="button"
+            onClick={() => void load()}
+            className="rounded-lg bg-red-100 px-3 py-1 font-semibold text-red-900 hover:bg-red-200 dark:bg-red-900/60 dark:text-red-100"
+          >
+            Retry
+          </button>
+        </div>
+      )}
       <p className="text-sm text-zinc-600 dark:text-zinc-400">
         Click <strong>Open</strong> to expand the job sheet and inspection photos <strong>under that booking</strong>. Click{" "}
         <strong>Close</strong> to collapse.
       </p>
-      <div className="grid gap-3">
-        {bookings.map((booking) => {
-          const isOpen = selected?._id === booking._id;
-          return (
-            <div
-              key={booking._id}
-              className={`card overflow-hidden p-0 transition-[box-shadow] ${
-                isOpen ? "shadow-md ring-2 ring-amber-400/45 dark:ring-amber-500/35" : ""
-              }`}
-            >
-              <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-                <div className="min-w-0 flex-1 space-y-2">
-                  <div>
-                    <p className="font-semibold text-zinc-900 dark:text-zinc-50">
-                      {booking.customerName} — {booking.serviceId?.name}
-                    </p>
-                    <p className="mt-0.5 text-sm text-gray-600 dark:text-zinc-400">
-                      {booking.date} {booking.time} · {booking.status}
-                    </p>
-                  </div>
-                  <BookingCustomerSummary booking={booking} />
-                </div>
-                <div className="flex flex-col items-end gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-                  <div className="flex flex-wrap justify-end gap-1.5">
-                    <span
-                      className={`rounded-full px-2.5 py-1 text-xs font-semibold ${paymentStatusPillClass(booking.paymentStatus)}`}
-                    >
-                      {paymentStatusLabel(booking.paymentStatus)}
-                    </span>
-                    {booking.finalAmount != null && booking.finalAmount > 0 ? (
-                      <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-semibold tabular-nums text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100">
-                        {formatInr(booking.finalAmount)}
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="flex flex-wrap justify-end gap-2">
-                    {(["Pending", "In Progress", "Completed"] as const).map((status) => {
-                      const active = booking.status === status;
-                      return (
-                        <button
-                          key={status}
-                          type="button"
-                          className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
-                            active
-                              ? "bg-amber-600 text-white shadow-sm ring-2 ring-amber-400/80 dark:bg-amber-500 dark:text-zinc-950 dark:ring-amber-300/60"
-                              : "border border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
-                          }`}
-                          onClick={() => void updateStatus(booking._id, status)}
-                        >
-                          {status}
-                        </button>
-                      );
-                    })}
-                    <button
-                      type="button"
-                      className={`rounded-lg border px-3 py-2 text-xs font-medium ${
-                        isOpen
-                          ? "border-amber-500 bg-amber-50 text-amber-950 dark:border-amber-500/60 dark:bg-amber-950/30 dark:text-amber-100"
-                          : "border-zinc-300 bg-white hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:hover:bg-zinc-800"
-                      }`}
-                      onClick={() => toggleDetails(booking)}
-                    >
-                      {isOpen ? "Close" : "Open"}
-                    </button>
-                  </div>
-                </div>
-              </div>
-              {isOpen && selected && (
-                <div
-                  ref={openPanelRef}
-                  className="space-y-5 border-t border-zinc-200/90 bg-gradient-to-b from-zinc-50/90 to-white p-4 sm:p-6 dark:border-zinc-700/90 dark:from-zinc-950/50 dark:to-zinc-900/40"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Job sheet</p>
-                      <h2 className="mt-1 text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{selected.customerName}</h2>
-                      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                        <span className="font-medium text-zinc-800 dark:text-zinc-200">{selected.serviceId?.name}</span>
-                        {" · "}
-                        {selected.date} {selected.time}
+      {loading ? (
+        <div className="card p-10 text-center text-sm text-zinc-500">
+          Loading bookings…
+        </div>
+      ) : bookings.length === 0 ? (
+        <div className="card p-10 text-center text-zinc-500 dark:text-zinc-400">
+          <p className="text-base font-semibold text-zinc-800 dark:text-zinc-200">No bookings found</p>
+          <p className="mt-1 text-sm">There are no bookings matching your selected filters.</p>
+        </div>
+      ) : (
+        <div className="grid gap-3">
+          {bookings.map((booking) => {
+            const isOpen = selected?._id === booking._id;
+            return (
+              <div
+                key={booking._id}
+                className={`card overflow-hidden p-0 transition-[box-shadow] ${
+                  isOpen ? "shadow-md ring-2 ring-amber-400/45 dark:ring-amber-500/35" : ""
+                }`}
+              >
+                <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div>
+                      <p className="font-semibold text-zinc-900 dark:text-zinc-50">
+                        {booking.customerName} — {booking.serviceId?.name || (booking as unknown as { serviceName?: string }).serviceName || "Service"}
+                      </p>
+                      <p className="mt-0.5 text-sm text-gray-600 dark:text-zinc-400">
+                        {booking.date} {booking.time} · {booking.status}
                       </p>
                     </div>
-                    <span className="shrink-0 rounded-lg border border-zinc-200 bg-white px-2.5 py-1 font-mono text-[11px] text-zinc-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-                      …{selected._id.slice(-10)}
-                    </span>
+                    <BookingCustomerSummary booking={booking} />
                   </div>
+                  <div className="flex flex-col items-end gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+                    <div className="flex flex-wrap justify-end gap-1.5">
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-xs font-semibold ${paymentStatusPillClass(booking.paymentStatus)}`}
+                      >
+                        {paymentStatusLabel(booking.paymentStatus)}
+                      </span>
+                      {booking.finalAmount != null && booking.finalAmount > 0 ? (
+                        <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-semibold tabular-nums text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100">
+                          {formatInr(booking.finalAmount)}
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="flex flex-wrap justify-end gap-2">
+                      {(["Pending", "In Progress", "Completed"] as const).map((status) => {
+                        const active = booking.status === status;
+                        return (
+                          <button
+                            key={status}
+                            type="button"
+                            className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                              active
+                                ? "bg-amber-600 text-white shadow-sm ring-2 ring-amber-400/80 dark:bg-amber-500 dark:text-zinc-950 dark:ring-amber-300/60"
+                                : "border border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                            }`}
+                            onClick={() => void updateStatus(booking._id, status)}
+                          >
+                            {status}
+                          </button>
+                        );
+                      })}
+                      <button
+                        type="button"
+                        className={`rounded-lg border px-3 py-2 text-xs font-medium ${
+                          isOpen
+                            ? "border-amber-500 bg-amber-50 text-amber-950 dark:border-amber-500/60 dark:bg-amber-950/30 dark:text-amber-100"
+                            : "border-zinc-300 bg-white hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:hover:bg-zinc-800"
+                        }`}
+                        onClick={() => toggleDetails(booking)}
+                      >
+                        {isOpen ? "Close" : "Open"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                {isOpen && selected && (
+                  <div
+                    ref={openPanelRef}
+                    className="space-y-5 border-t border-zinc-200/90 bg-gradient-to-b from-zinc-50/90 to-white p-4 sm:p-6 dark:border-zinc-700/90 dark:from-zinc-950/50 dark:to-zinc-900/40"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Job sheet</p>
+                        <h2 className="mt-1 text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{selected.customerName}</h2>
+                        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                          <span className="font-medium text-zinc-800 dark:text-zinc-200">
+                            {selected.serviceId?.name || (selected as unknown as { serviceName?: string }).serviceName || "Service"}
+                          </span>
+                          {" · "}
+                          {selected.date} {selected.time}
+                        </p>
+                      </div>
+                      <span className="shrink-0 rounded-lg border border-zinc-200 bg-white px-2.5 py-1 font-mono text-[11px] text-zinc-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                        …{(selected._id || "").slice(-10)}
+                      </span>
+                    </div>
                   <div className="rounded-2xl border border-zinc-200/90 bg-white/90 p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/70">
                     <BookingCustomerSummary booking={selected} />
                   </div>
@@ -932,6 +973,7 @@ function AdminBookingsPageContent() {
           );
         })}
       </div>
+      )}
     </div>
   );
 }

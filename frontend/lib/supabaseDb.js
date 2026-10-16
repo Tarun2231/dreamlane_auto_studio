@@ -228,53 +228,95 @@ readLocalStore();
  * SERVICES
  * =========================================================================
  */
-async function getServices() {
+const isUUID = (str) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(str || ""));
+
+function normalizeService(s) {
+  if (!s) return null;
+  const id = s.id || s._id || "";
+  return {
+    _id: id,
+    id: id,
+    name: String(s.name || "").trim(),
+    description: String(s.description || "").trim(),
+    image: String(s.image || "").trim() || "/images/services/placeholder-service.png",
+    basePrice: Number(s.base_price != null ? s.base_price : s.basePrice || 0),
+    price: Number(s.base_price != null ? s.base_price : s.price || s.basePrice || 0),
+    duration: Number(s.duration || 60),
+    durationText: `${s.duration || 60} mins`,
+    followUpMonths: s.follow_up_months != null ? Number(s.follow_up_months) : (s.followUpMonths != null ? Number(s.followUpMonths) : null),
+    isActive: s.is_active !== undefined ? Boolean(s.is_active) : (s.isActive !== undefined ? Boolean(s.isActive) : true),
+    createdAt: s.created_at || s.createdAt || new Date().toISOString(),
+    updatedAt: s.updated_at || s.updatedAt || new Date().toISOString(),
+  };
+}
+
+async function getServices(includeInactive = false) {
   readLocalStore();
   if (supabase) {
     try {
-      const { data, error } = await supabase
-        .from("services")
-        .select("*")
-        .eq("is_active", true)
-        .order("base_price", { ascending: true });
+      let query = supabase.from("services").select("*").order("base_price", { ascending: true });
+      if (!includeInactive) {
+        query = query.eq("is_active", true);
+      }
+      const { data, error } = await query;
 
-      if (!error && Array.isArray(data) && data.length > 0) {
-        const supaList = data.map((s) => ({
-          _id: s.id,
-          id: s.id,
-          name: s.name,
-          description: s.description,
-          image: s.image,
-          basePrice: Number(s.base_price || 0),
-          price: Number(s.base_price || 0),
-          duration: Number(s.duration || 60),
-          durationText: `${s.duration || 60} mins`,
-          followUpMonths: s.follow_up_months,
-          isActive: s.is_active,
-        }));
+      if (!error && Array.isArray(data)) {
+        const supaList = data.map(normalizeService);
 
-        const supaIds = new Set(supaList.map((s) => s.id));
-        const localOnly = inMemoryStore.services.filter(
-          (s) => s.isActive !== false && !supaIds.has(s._id) && !supaIds.has(s.id)
-        );
+        // Synchronize inMemoryStore with latest Supabase active states
+        for (const s of supaList) {
+          const match = inMemoryStore.services.find((ls) => ls._id === s.id || ls.id === s.id);
+          if (match) {
+            match.isActive = s.isActive;
+            match.name = s.name;
+            match.description = s.description;
+            match.basePrice = s.basePrice;
+            match.duration = s.duration;
+            match.image = s.image;
+          }
+        }
+
+        // Check against ALL Supabase service IDs so offline services are NEVER accidentally resurrected by local fallback
+        const allSupaIds = new Set(data.map((s) => s.id));
+        const localOnly = inMemoryStore.services
+          .filter((s) => (includeInactive ? true : s.isActive !== false) && !allSupaIds.has(s._id) && !allSupaIds.has(s.id))
+          .map(normalizeService);
+
         return [...supaList, ...localOnly];
       }
     } catch (err) {
       console.warn("[supabaseDb] getServices fallback:", err?.message);
     }
   }
-  return inMemoryStore.services.filter((s) => s.isActive !== false);
+  return inMemoryStore.services
+    .filter((s) => (includeInactive ? true : s.isActive !== false))
+    .map(normalizeService);
 }
 
-async function getServiceById(id) {
-  const all = await getServices();
-  return all.find((s) => s._id === id || s.id === id) || null;
+async function getServiceById(id, includeInactive = true) {
+  const all = await getServices(includeInactive);
+  const found = all.find((s) => s._id === id || s.id === id);
+  if (found) return found;
+
+  if (supabase && isUUID(id)) {
+    try {
+      const { data, error } = await supabase.from("services").select("*").eq("id", id).maybeSingle();
+      if (!error && data) {
+        return normalizeService(data);
+      }
+    } catch (err) {
+      console.warn("[supabaseDb] getServiceById Supabase query fallback:", err?.message);
+    }
+  }
+  return null;
 }
 
 async function createService(payload) {
   readLocalStore();
   let id = `svc-${Date.now()}`;
   const now = new Date().toISOString();
+  const isActive = payload.isActive !== false;
 
   if (supabase) {
     try {
@@ -287,7 +329,7 @@ async function createService(payload) {
           base_price: Number(payload.basePrice || 0),
           duration: Number(payload.duration || 60),
           follow_up_months: payload.followUpMonths ? Number(payload.followUpMonths) : null,
-          is_active: payload.isActive !== false,
+          is_active: isActive,
         }])
         .select()
         .single();
@@ -313,7 +355,7 @@ async function createService(payload) {
     duration: Number(payload.duration || 60),
     durationText: `${payload.duration || 60} mins`,
     followUpMonths: payload.followUpMonths ? Number(payload.followUpMonths) : null,
-    isActive: payload.isActive !== false,
+    isActive: isActive,
     createdAt: now,
     updatedAt: now,
   };
@@ -363,8 +405,7 @@ async function updateService(id, updates) {
       if (updates.isActive !== undefined) supaUpdates.is_active = Boolean(updates.isActive);
       supaUpdates.updated_at = now;
 
-      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-      if (isUUID) {
+      if (isUUID(id)) {
         const { error } = await supabase.from("services").update(supaUpdates).eq("id", id);
         if (error) {
           console.warn("[supabaseDb] updateService Supabase error:", error.message || error);
@@ -384,6 +425,7 @@ async function updateService(id, updates) {
     basePrice: Number(updates.basePrice || 0),
     duration: Number(updates.duration || 60),
     followUpMonths: updates.followUpMonths,
+    isActive: updates.isActive !== undefined ? Boolean(updates.isActive) : true,
   };
 }
 
@@ -394,8 +436,7 @@ async function deleteService(id) {
 
   if (supabase) {
     try {
-      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-      if (isUUID) {
+      if (isUUID(id)) {
         const { error } = await supabase.from("services").delete().eq("id", id);
         if (error) {
           console.warn("[supabaseDb] deleteService Supabase error:", error.message || error);
@@ -434,87 +475,145 @@ async function getSlots(dateFilter) {
  * BOOKINGS
  * =========================================================================
  */
-async function createBooking(payload) {
-  const id = `DL-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
-  const now = new Date().toISOString();
+function normalizeBooking(b) {
+  if (!b) return null;
+  const id = b.id || b._id || "";
+  const sName = b.service_name || b.serviceName || (b.serviceId && b.serviceId.name) || "Detailing Service";
+  const sId = b.service_id || (b.serviceId && (b.serviceId._id || b.serviceId.id)) || "";
 
-  // Find service info
-  let serviceObj = null;
+  return {
+    _id: id,
+    id: id,
+    customerName: String(b.customer_name || b.customerName || "Customer").trim(),
+    customer_name: String(b.customer_name || b.customerName || "Customer").trim(),
+    email: String(b.email || "").trim().toLowerCase(),
+    phone: String(b.phone || "").trim(),
+    vehicleType: b.vehicle_type || b.vehicleType || "Sedan",
+    vehicle_type: b.vehicle_type || b.vehicleType || "Sedan",
+    carMake: String(b.car_make || b.carMake || "").trim(),
+    car_make: String(b.car_make || b.carMake || "").trim(),
+    carModel: String(b.car_model || b.carModel || "").trim(),
+    car_model: String(b.car_model || b.carModel || "").trim(),
+    vehicleYear: b.vehicle_year != null ? Number(b.vehicle_year) : (b.vehicleYear != null ? Number(b.vehicleYear) : null),
+    vehicle_year: b.vehicle_year != null ? Number(b.vehicle_year) : (b.vehicleYear != null ? Number(b.vehicleYear) : null),
+    chassisNumber: String(b.chassis_number || b.chassisNumber || "").trim(),
+    chassis_number: String(b.chassis_number || b.chassisNumber || "").trim(),
+    registrationNumber: String(b.registration_number || b.registrationNumber || "").trim(),
+    registration_number: String(b.registration_number || b.registrationNumber || "").trim(),
+    date: String(b.date || "").trim(),
+    time: String(b.time || "").trim(),
+    slotId: b.slot_id || b.slotId || "",
+    status: b.status || "Pending",
+    finalAmount: Number(b.final_amount != null ? b.final_amount : (b.finalAmount != null ? b.finalAmount : 0)),
+    final_amount: Number(b.final_amount != null ? b.final_amount : (b.finalAmount != null ? b.finalAmount : 0)),
+    paymentStatus: b.payment_status || b.paymentStatus || "unpaid",
+    payment_status: b.payment_status || b.paymentStatus || "unpaid",
+    paymentMethod: b.payment_method || b.paymentMethod || "",
+    paymentReference: b.payment_reference || b.paymentReference || "",
+    paymentReceivedYmd: b.payment_received_ymd || b.paymentReceivedYmd || "",
+    serviceName: sName,
+    service_name: sName,
+    serviceId: {
+      _id: sId,
+      id: sId,
+      name: sName,
+      duration: b.serviceId?.duration || 60,
+    },
+    service_id: sId,
+    createdAt: b.created_at || b.createdAt || new Date().toISOString(),
+    created_at: b.created_at || b.createdAt || new Date().toISOString(),
+    updatedAt: b.updated_at || b.updatedAt || new Date().toISOString(),
+    updated_at: b.updated_at || b.updatedAt || new Date().toISOString(),
+  };
+}
+
+async function createBooking(payload) {
+  readLocalStore();
+  const now = new Date().toISOString();
+  let id = `DL-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+
+  // Find and validate service info
   const sid = payload.serviceId || payload.service_id;
-  if (sid) {
+  let serviceObj = sid ? await getServiceById(sid, true) : null;
+  if (!serviceObj && sid) {
     serviceObj = inMemoryStore.services.find((s) => s._id === sid || s.id === sid);
   }
+
+  // Database-level check: cannot start booking an offline service
+  if (serviceObj && serviceObj.isActive === false) {
+    const err = new Error("This service is currently offline and unavailable for booking.");
+    err.statusCode = 400;
+    throw err;
+  }
+
   if (!serviceObj) {
     serviceObj = {
       _id: sid || "custom-service",
+      id: sid || "custom-service",
       name: payload.serviceName || payload.service_name || "Custom Detailing Service",
       description: "Auto detailing service",
       basePrice: Number(payload.finalAmount || payload.final_amount || 0),
       duration: 60,
+      isActive: true,
     };
   }
 
-  const normalized = {
-    _id: id,
-    id: id,
-    serviceId: serviceObj,
-    service_id: serviceObj._id,
-    serviceName: serviceObj.name,
-    service_name: serviceObj.name,
-    vehicleType: payload.vehicleType || payload.vehicle_type || "Sedan",
-    vehicle_type: payload.vehicleType || payload.vehicle_type || "Sedan",
-    date: String(payload.date || "").trim(),
-    time: String(payload.time || "").trim(),
-    slotId: payload.slotId || payload.slot_id || "",
-    status: "Pending",
-    customerName: String(payload.customerName || payload.customer_name || "").trim(),
-    customer_name: String(payload.customerName || payload.customer_name || "").trim(),
-    phone: String(payload.phone || "").trim(),
-    email: String(payload.email || "").trim().toLowerCase(),
-    carMake: String(payload.carMake || payload.car_make || "").trim(),
-    car_make: String(payload.carMake || payload.car_make || "").trim(),
-    carModel: String(payload.carModel || payload.car_model || "").trim(),
-    car_model: String(payload.carModel || payload.car_model || "").trim(),
-    vehicleYear: Number(payload.vehicleYear || payload.vehicle_year || new Date().getFullYear()),
-    chassisNumber: String(payload.chassisNumber || payload.chassis_number || "").trim(),
-    registrationNumber: String(payload.registrationNumber || payload.registration_number || "").trim(),
-    finalAmount: Number(payload.finalAmount || payload.final_amount || serviceObj.basePrice || 0),
-    paymentStatus: "unpaid",
-    createdAt: now,
-    created_at: now,
-    updatedAt: now,
-  };
+  const sId = isUUID(serviceObj.id || serviceObj._id) ? (serviceObj.id || serviceObj._id) : null;
 
   // Try Supabase insert
   if (supabase) {
     try {
-      await supabase.from("bookings").insert([
-        {
-          service_name: normalized.serviceName,
-          vehicle_type: normalized.vehicleType,
-          date: normalized.date,
-          time: normalized.time,
-          status: normalized.status,
-          customer_name: normalized.customerName,
-          phone: normalized.phone,
-          email: normalized.email,
-          car_make: normalized.carMake,
-          car_model: normalized.carModel,
-          vehicle_year: normalized.vehicleYear,
-          chassis_number: normalized.chassisNumber,
-          registration_number: normalized.registrationNumber,
-          final_amount: normalized.finalAmount,
-          payment_status: normalized.paymentStatus,
-        },
-      ]);
+      const { data, error } = await supabase
+        .from("bookings")
+        .insert([
+          {
+            service_id: sId,
+            service_name: serviceObj.name,
+            vehicle_type: payload.vehicleType || payload.vehicle_type || "Sedan",
+            date: String(payload.date || "").trim(),
+            time: String(payload.time || "").trim(),
+            status: "Pending",
+            customer_name: String(payload.customerName || payload.customer_name || "").trim(),
+            phone: String(payload.phone || "").trim(),
+            email: String(payload.email || "").trim().toLowerCase(),
+            car_make: String(payload.carMake || payload.car_make || "").trim(),
+            car_model: String(payload.carModel || payload.car_model || "").trim(),
+            vehicle_year: Number(payload.vehicleYear || payload.vehicle_year || new Date().getFullYear()),
+            chassis_number: String(payload.chassisNumber || payload.chassis_number || "").trim(),
+            registration_number: String(payload.registrationNumber || payload.registration_number || "").trim(),
+            final_amount: Number(payload.finalAmount || payload.final_amount || serviceObj.basePrice || 0),
+            payment_status: "unpaid",
+          },
+        ])
+        .select()
+        .single();
+
+      if (!error && data && data.id) {
+        id = data.id; // Use canonical Supabase UUID
+      } else if (error) {
+        console.warn("[supabaseDb] Supabase booking insert warning:", error.message || error);
+      }
     } catch (supaErr) {
-      console.warn("[supabaseDb] Supabase booking insert fallback:", supaErr?.message);
+      console.warn("[supabaseDb] Supabase booking insert fallback:", supaErr?.message || supaErr);
     }
   }
 
-  // Always save to persistent store
+  const normalized = normalizeBooking({
+    ...payload,
+    id,
+    _id: id,
+    service_id: sId,
+    serviceId: serviceObj,
+    serviceName: serviceObj.name,
+    service_name: serviceObj.name,
+    status: "Pending",
+    payment_status: "unpaid",
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  // Always save to persistent local store with canonical ID
   inMemoryStore.bookings.unshift(normalized);
-  // Mark matching slot as booked
   if (normalized.slotId) {
     const slot = inMemoryStore.slots.find((s) => s._id === normalized.slotId || s.id === normalized.slotId);
     if (slot) slot.isAvailable = false;
@@ -526,64 +625,59 @@ async function createBooking(payload) {
 
 async function getBookingById(id) {
   readLocalStore();
-  const match = inMemoryStore.bookings.find((b) => b._id === id || b.id === id);
-  if (match) return match;
+  const localMatch = inMemoryStore.bookings.find((b) => b._id === id || b.id === id);
 
-  if (supabase) {
+  if (supabase && isUUID(id)) {
     try {
-      const { data } = await supabase.from("bookings").select("*").eq("id", id).maybeSingle();
-      if (data) {
-        return {
-          _id: data.id,
-          id: data.id,
-          serviceId: { _id: data.service_id, name: data.service_name || "Detailing Service" },
-          serviceName: data.service_name,
-          customerName: data.customer_name,
-          phone: data.phone,
-          email: data.email,
-          vehicleType: data.vehicle_type,
-          carMake: data.car_make,
-          carModel: data.car_model,
-          vehicleYear: data.vehicle_year,
-          chassisNumber: data.chassis_number,
-          date: data.date,
-          time: data.time,
-          status: data.status,
-          finalAmount: Number(data.final_amount || 0),
-          paymentStatus: data.payment_status,
-          createdAt: data.created_at,
-        };
+      const { data, error } = await supabase.from("bookings").select("*").eq("id", id).maybeSingle();
+      if (!error && data) {
+        const supaNorm = normalizeBooking(data);
+        if (localMatch) {
+          const supaTime = new Date(supaNorm.updatedAt || supaNorm.createdAt || 0).getTime();
+          const localTime = new Date(localMatch.updatedAt || localMatch.createdAt || 0).getTime();
+          if (localTime > supaTime) {
+            return normalizeBooking({ ...supaNorm, ...localMatch });
+          }
+        }
+        return supaNorm;
       }
-    } catch {
-      // Fallback
+    } catch (err) {
+      console.warn("[supabaseDb] getBookingById Supabase query fallback:", err?.message);
     }
   }
-  return null;
+  return localMatch ? normalizeBooking(localMatch) : null;
 }
 
 async function lookupBooking(id, email) {
   const normId = String(id || "").trim();
   const normEmail = String(email || "").trim().toLowerCase();
-  const all = inMemoryStore.bookings;
-  const found = all.find(
+  readLocalStore();
+
+  const found = inMemoryStore.bookings.find(
     (b) =>
       (b._id === normId || b.id === normId) &&
       String(b.email || "").toLowerCase() === normEmail
   );
-  if (found) return found;
+  if (found) return normalizeBooking(found);
 
   if (supabase) {
     try {
-      const { data } = await supabase
-        .from("bookings")
-        .select("*")
-        .eq("email", normEmail)
-        .maybeSingle();
-      if (data && (data.id === normId || String(data.id).startsWith(normId))) {
-        return getBookingById(data.id);
+      let query = supabase.from("bookings").select("*").eq("email", normEmail);
+      if (isUUID(normId)) {
+        query = query.eq("id", normId);
       }
-    } catch {
-      // Fallback
+      const { data } = await query;
+      if (Array.isArray(data) && data.length > 0) {
+        const match = data.find((row) => row.id === normId || String(row.id).startsWith(normId)) || data[0];
+        if (match) {
+          const normalized = normalizeBooking(match);
+          inMemoryStore.bookings.unshift(normalized);
+          writeLocalStore();
+          return normalized;
+        }
+      }
+    } catch (err) {
+      console.warn("[supabaseDb] lookupBooking Supabase query fallback:", err?.message);
     }
   }
   return null;
@@ -591,19 +685,94 @@ async function lookupBooking(id, email) {
 
 async function listBookings(params = {}) {
   readLocalStore();
-  let list = inMemoryStore.bookings;
+  if (supabase) {
+    try {
+      let query = supabase.from("bookings").select("*").order("created_at", { ascending: false });
+      if (params.status) query = query.eq("status", params.status);
+      if (params.paymentStatus) query = query.eq("payment_status", params.paymentStatus);
+      if (params.dateFrom && params.dateTo) {
+        query = query.gte("date", params.dateFrom).lte("date", params.dateTo);
+      } else if (params.dateFrom) {
+        query = query.gte("date", params.dateFrom);
+      } else if (params.date) {
+        query = query.eq("date", params.date);
+      }
+
+      const { data, error } = await query;
+      if (!error && Array.isArray(data)) {
+        const supaList = data.map(normalizeBooking);
+        const supaIds = new Set(supaList.map((b) => b._id));
+
+        const localById = new Map();
+        for (const lb of inMemoryStore.bookings) {
+          if (lb._id) localById.set(lb._id, lb);
+          if (lb.id) localById.set(lb.id, lb);
+        }
+
+        // Overlay any newer local edits onto Supabase records
+        const mergedSupaList = supaList.map((supaB) => {
+          const localMatch = localById.get(supaB._id);
+          if (localMatch) {
+            const supaTime = new Date(supaB.updatedAt || supaB.createdAt || 0).getTime();
+            const localTime = new Date(localMatch.updatedAt || localMatch.createdAt || 0).getTime();
+            if (localTime > supaTime) {
+              return normalizeBooking({ ...supaB, ...localMatch });
+            }
+          }
+          return supaB;
+        });
+
+        const localOnly = inMemoryStore.bookings
+          .filter((b) => !supaIds.has(b._id) && !supaIds.has(b.id))
+          .map(normalizeBooking);
+
+        let combined = [...mergedSupaList, ...localOnly];
+        if (params.status) {
+          combined = combined.filter((b) => b.status === params.status);
+        }
+        if (params.paymentStatus) {
+          combined = combined.filter((b) => b.paymentStatus === params.paymentStatus);
+        }
+        if (params.search) {
+          const q = String(params.search).toLowerCase();
+          combined = combined.filter((b) =>
+            String(b.customerName || "").toLowerCase().includes(q) ||
+            String(b.phone || "").includes(q) ||
+            String(b.email || "").toLowerCase().includes(q) ||
+            String(b.carModel || "").toLowerCase().includes(q) ||
+            String(b._id || "").toLowerCase().includes(q)
+          );
+        }
+        return combined;
+      }
+    } catch (err) {
+      console.warn("[supabaseDb] listBookings Supabase query fallback:", err?.message);
+    }
+  }
+
+  // Fallback to local store with safe filtering
+  let list = inMemoryStore.bookings.map(normalizeBooking);
   if (params.status) {
     list = list.filter((b) => b.status === params.status);
   }
+  if (params.paymentStatus) {
+    list = list.filter((b) => b.paymentStatus === params.paymentStatus);
+  }
+  if (params.dateFrom && params.dateTo) {
+    list = list.filter((b) => b.date >= params.dateFrom && b.date <= params.dateTo);
+  } else if (params.dateFrom) {
+    list = list.filter((b) => b.date >= params.dateFrom);
+  } else if (params.date) {
+    list = list.filter((b) => b.date === params.date);
+  }
   if (params.search) {
-    const q = params.search.toLowerCase();
-    list = list.filter(
-      (b) =>
-        b.customerName.toLowerCase().includes(q) ||
-        b.phone.includes(q) ||
-        b.email.toLowerCase().includes(q) ||
-        b.carModel.toLowerCase().includes(q) ||
-        b._id.toLowerCase().includes(q)
+    const q = String(params.search).toLowerCase();
+    list = list.filter((b) =>
+      String(b.customerName || "").toLowerCase().includes(q) ||
+      String(b.phone || "").includes(q) ||
+      String(b.email || "").toLowerCase().includes(q) ||
+      String(b.carModel || "").toLowerCase().includes(q) ||
+      String(b._id || "").toLowerCase().includes(q)
     );
   }
   return list;
@@ -611,25 +780,54 @@ async function listBookings(params = {}) {
 
 async function updateBooking(id, updates) {
   readLocalStore();
-  const booking = inMemoryStore.bookings.find((b) => b._id === id || b.id === id);
+  let booking = inMemoryStore.bookings.find((b) => b._id === id || b.id === id);
+  const now = new Date().toISOString();
+
+  // Normalize updates to simultaneously populate both camelCase and snake_case
+  const fullUpdates = { ...updates };
+  if (fullUpdates.finalAmount !== undefined) fullUpdates.final_amount = Number(fullUpdates.finalAmount);
+  if (fullUpdates.final_amount !== undefined) fullUpdates.finalAmount = Number(fullUpdates.final_amount);
+  if (fullUpdates.paymentStatus !== undefined) fullUpdates.payment_status = fullUpdates.paymentStatus;
+  if (fullUpdates.payment_status !== undefined) fullUpdates.paymentStatus = fullUpdates.payment_status;
+  if (fullUpdates.paymentMethod !== undefined) fullUpdates.payment_method = fullUpdates.paymentMethod;
+  if (fullUpdates.payment_method !== undefined) fullUpdates.paymentMethod = fullUpdates.payment_method;
+  if (fullUpdates.paymentReference !== undefined) fullUpdates.payment_reference = fullUpdates.paymentReference;
+  if (fullUpdates.payment_reference !== undefined) fullUpdates.paymentReference = fullUpdates.payment_reference;
+  if (fullUpdates.paymentReceivedYmd !== undefined) fullUpdates.payment_received_ymd = fullUpdates.paymentReceivedYmd;
+  if (fullUpdates.payment_received_ymd !== undefined) fullUpdates.paymentReceivedYmd = fullUpdates.payment_received_ymd;
+
   if (booking) {
-    Object.assign(booking, updates, { updatedAt: new Date().toISOString() });
+    Object.assign(booking, fullUpdates, { updatedAt: now, updated_at: now });
     writeLocalStore();
   }
+
   if (supabase) {
     try {
       const supaUpdates = {};
-      if (updates.status) supaUpdates.status = updates.status;
-      if (updates.paymentStatus) supaUpdates.payment_status = updates.paymentStatus;
-      if (updates.finalAmount !== undefined) supaUpdates.final_amount = updates.finalAmount;
-      if (Object.keys(supaUpdates).length > 0) {
-        await supabase.from("bookings").update(supaUpdates).eq("id", id);
+      if (fullUpdates.status) supaUpdates.status = fullUpdates.status;
+      if (fullUpdates.payment_status) supaUpdates.payment_status = fullUpdates.payment_status;
+      if (fullUpdates.final_amount !== undefined) supaUpdates.final_amount = Number(fullUpdates.final_amount);
+      if (fullUpdates.payment_method !== undefined) supaUpdates.payment_method = String(fullUpdates.payment_method).trim();
+      if (fullUpdates.payment_reference !== undefined) supaUpdates.payment_reference = String(fullUpdates.payment_reference).trim();
+      if (fullUpdates.payment_received_ymd !== undefined) supaUpdates.payment_received_ymd = String(fullUpdates.payment_received_ymd).trim();
+      supaUpdates.updated_at = now;
+
+      if (isUUID(id) && Object.keys(supaUpdates).length > 0) {
+        const { data, error } = await supabase.from("bookings").update(supaUpdates).eq("id", id).select().single();
+        if (!error && data) {
+          booking = normalizeBooking(data);
+          const idx = inMemoryStore.bookings.findIndex((b) => b._id === id || b.id === id);
+          if (idx >= 0) inMemoryStore.bookings[idx] = booking;
+          else inMemoryStore.bookings.unshift(booking);
+          writeLocalStore();
+        }
       }
-    } catch {
-      // Fallback
+    } catch (err) {
+      console.warn("[supabaseDb] updateBooking Supabase update fallback:", err?.message);
     }
   }
-  return booking;
+
+  return booking ? normalizeBooking(booking) : { _id: id, id, ...fullUpdates };
 }
 
 /**

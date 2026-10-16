@@ -83,20 +83,27 @@ export default function BookingWizard() {
   useEffect(() => {
     api
       .get<Service[]>("/services")
-      .then((res) => setServices(res.data))
+      .then((res) => {
+        const list = Array.isArray(res.data) ? res.data : [];
+        const active = list.filter((s) => s.isActive !== false);
+        setServices(active);
+        const sid = searchParams?.get("serviceId");
+        if (sid) {
+          const match = active.find((s) => s._id === sid);
+          if (match) {
+            setForm((f) => ({ ...f, serviceId: sid }));
+          } else {
+            setError("The selected service is currently unavailable or offline. Please choose another service.");
+            setForm((f) => ({ ...f, serviceId: "" }));
+          }
+        }
+      })
       .catch(() => setError("Could not load services."));
-  }, []);
+  }, [searchParams]);
 
   useEffect(() => {
     void loadSlots();
   }, []);
-
-  useEffect(() => {
-    const sid = searchParams?.get("serviceId");
-    if (sid) {
-      setForm((f) => ({ ...f, serviceId: sid }));
-    }
-  }, [searchParams]);
 
   const selectedService = useMemo(
     () => services.find((service) => service._id === form.serviceId),

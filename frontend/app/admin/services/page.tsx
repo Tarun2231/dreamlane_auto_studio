@@ -14,9 +14,18 @@ type ServiceForm = {
   basePrice: number;
   duration: number;
   followUpMonths: number | "";
+  isActive: boolean;
 };
 
-const empty: ServiceForm = { name: "", description: "", image: "", basePrice: 0, duration: 0, followUpMonths: "" };
+const empty: ServiceForm = {
+  name: "",
+  description: "",
+  image: "",
+  basePrice: 0,
+  duration: 0,
+  followUpMonths: "",
+  isActive: true,
+};
 
 const inputClass =
   "w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm outline-none ring-amber-500/0 transition placeholder:text-zinc-400 focus:border-amber-500/50 focus:ring-2 focus:ring-amber-500/20 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500";
@@ -60,14 +69,23 @@ export default function AdminServicesPage() {
     }
   };
 
-  const load = () =>
-    api
-      .get<Service[]>("/services")
-      .then((res) => setServices(res.data))
+  const load = () => {
+    setListLoading(true);
+    adminApi
+      .get<Service[]>("/service")
+      .then((res) => {
+        setServices(Array.isArray(res.data) ? res.data : []);
+      })
       .catch(() => {
-        setMessage({ type: "err", text: "Could not load services. Is the API running?" });
+        api
+          .get<Service[]>("/services?all=true")
+          .then((res) => setServices(Array.isArray(res.data) ? res.data : []))
+          .catch(() => {
+            setMessage({ type: "err", text: "Could not load services. Is the API running?" });
+          });
       })
       .finally(() => setListLoading(false));
+  };
 
   useEffect(() => void load(), []);
 
@@ -89,6 +107,7 @@ export default function AdminServicesPage() {
     basePrice: f.basePrice,
     duration: f.duration,
     followUpMonths: f.followUpMonths === "" ? null : Number(f.followUpMonths),
+    isActive: f.isActive !== false,
   });
 
   const create = async (e: FormEvent) => {
@@ -136,6 +155,24 @@ export default function AdminServicesPage() {
     }
   };
 
+  const toggleActive = async (service: Service) => {
+    setBusy(true);
+    setMessage(null);
+    const newStatus = service.isActive === false ? true : false;
+    try {
+      await adminApi.put(`/service/${service._id}`, { isActive: newStatus });
+      await load();
+      setMessage({
+        type: "ok",
+        text: `Service "${service.name}" is now ${newStatus ? "Online (visible on customer website & bookable)" : "Offline (hidden from booking)"}.`,
+      });
+    } catch {
+      setMessage({ type: "err", text: "Could not update service status." });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const startEdit = (service: Service) => {
     setEditingId(service._id);
     setEditForm({
@@ -148,6 +185,7 @@ export default function AdminServicesPage() {
         service.followUpMonths != null && Number(service.followUpMonths) > 0
           ? Number(service.followUpMonths)
           : "",
+      isActive: service.isActive !== false,
     });
   };
 
@@ -340,6 +378,18 @@ export default function AdminServicesPage() {
                 }
               />
             </div>
+            <div className="sm:col-span-2 flex items-center gap-2.5 pt-1">
+              <input
+                id="svc-active"
+                type="checkbox"
+                className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 dark:border-zinc-600 dark:bg-zinc-800"
+                checked={form.isActive !== false}
+                onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
+              />
+              <label htmlFor="svc-active" className="text-sm font-medium text-zinc-700 dark:text-zinc-300 cursor-pointer">
+                Online / Available on customer website (customers can select &amp; book)
+              </label>
+            </div>
           </div>
           <button
             type="submit"
@@ -487,6 +537,18 @@ export default function AdminServicesPage() {
                           }
                         />
                       </div>
+                      <div className="sm:col-span-2 flex items-center gap-2.5 pt-1">
+                        <input
+                          id="svc-edit-active"
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 dark:border-zinc-600 dark:bg-zinc-800"
+                          checked={editForm.isActive !== false}
+                          onChange={(e) => setEditForm({ ...editForm, isActive: e.target.checked })}
+                        />
+                        <label htmlFor="svc-edit-active" className="text-sm font-medium text-zinc-700 dark:text-zinc-300 cursor-pointer">
+                          Online / Available on customer website (customers can select &amp; book)
+                        </label>
+                      </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <button
@@ -515,7 +577,18 @@ export default function AdminServicesPage() {
                       />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-zinc-900 dark:text-zinc-50">{service.name}</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-semibold text-zinc-900 dark:text-zinc-50">{service.name}</p>
+                        {service.isActive !== false ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Online
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-zinc-200 px-2.5 py-0.5 text-xs font-semibold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                            <span className="h-1.5 w-1.5 rounded-full bg-zinc-400" /> Offline
+                          </span>
+                        )}
+                      </div>
                       <p className="mt-1 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{service.description}</p>
                       <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-500">
                         Base ₹{formatPrice(service.basePrice)} · {service.duration} min
@@ -535,8 +608,21 @@ export default function AdminServicesPage() {
                     <div className="flex shrink-0 gap-2 self-start sm:flex-col sm:items-stretch">
                       <button
                         type="button"
+                        className={`min-h-10 rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+                          service.isActive !== false
+                            ? "border-amber-400/60 bg-amber-50 text-amber-900 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200"
+                            : "border-emerald-400/60 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 dark:border-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-200"
+                        }`}
+                        onClick={() => void toggleActive(service)}
+                        disabled={busy}
+                      >
+                        {service.isActive !== false ? "Set Offline" : "Set Online"}
+                      </button>
+                      <button
+                        type="button"
                         className="min-h-10 rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
                         onClick={() => startEdit(service)}
+                        disabled={busy}
                       >
                         Edit
                       </button>

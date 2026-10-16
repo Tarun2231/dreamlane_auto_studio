@@ -21,23 +21,15 @@ module.exports = async function handler(req, res) {
 
   if (req.method === "PUT") {
     try {
-      const { name, description, image, basePrice, duration, followUpMonths } = req.body || {};
-      if (!name || !String(name).trim()) {
-        return res.status(400).json({ message: "Name is required." });
+      const updates = req.body || {};
+      if (updates.name !== undefined && !String(updates.name).trim()) {
+        return res.status(400).json({ message: "Name cannot be empty." });
       }
-      if (!description || !String(description).trim()) {
-        return res.status(400).json({ message: "Description is required." });
+      if (updates.description !== undefined && !String(updates.description).trim()) {
+        return res.status(400).json({ message: "Description cannot be empty." });
       }
 
-      const updated = await updateService(id, {
-        name,
-        description,
-        image,
-        basePrice,
-        duration,
-        followUpMonths,
-      });
-
+      const updated = await updateService(id, updates);
       return res.status(200).json(updated);
     } catch (error) {
       console.error("PUT /api/admin/service/[id] failed:", error);

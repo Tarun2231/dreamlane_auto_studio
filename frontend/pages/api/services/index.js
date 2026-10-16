@@ -7,7 +7,8 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const services = await getServices();
+    const includeInactive = req.query.all === "true" || req.query.all === "1" || req.query.includeInactive === "true";
+    const services = await getServices(includeInactive);
     return res.status(200).json(services);
   } catch (error) {
     console.error("GET /api/services error:", error?.message);
