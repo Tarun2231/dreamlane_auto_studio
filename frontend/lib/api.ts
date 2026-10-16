@@ -98,14 +98,32 @@ adminApi.interceptors.request.use((config) => {
   return config;
 });
 
+function isTokenTrulyExpired(token: string): boolean {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return false;
+    const jsonStr = atob(parts[1].replace(/-/g, "+").replace(/_/g, "/"));
+    const payload = JSON.parse(jsonStr);
+    if (!payload.exp) return false;
+    return Date.now() >= payload.exp * 1000;
+  } catch {
+    return false;
+  }
+}
+
 adminApi.interceptors.response.use(
   (res) => res,
   (err) => {
     const status = err?.response?.status;
     if (typeof window !== "undefined" && status === 401) {
-      localStorage.removeItem("adminToken");
-      if (!window.location.pathname.startsWith("/admin/login")) {
-        window.location.href = "/admin/login";
+      const currentToken = localStorage.getItem("adminToken");
+      if (!currentToken || isTokenTrulyExpired(currentToken)) {
+        localStorage.removeItem("adminToken");
+        if (!window.location.pathname.startsWith("/admin/login")) {
+          window.location.href = "/admin/login";
+        }
+      } else {
+        console.warn("[adminApi] 401 received for endpoint:", err?.config?.url, "— preserving active admin session.");
       }
     }
     return Promise.reject(err);

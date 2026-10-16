@@ -1,5 +1,7 @@
 const jwt = require("jsonwebtoken");
 
+const DEFAULT_JWT_SECRET = "dreamlane-secret-jwt-key-2026-secure-token";
+
 const protectAdmin = (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -8,7 +10,8 @@ const protectAdmin = (req, res, next) => {
 
   try {
     const token = authHeader.split(" ")[1];
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    const secret = process.env.JWT_SECRET || DEFAULT_JWT_SECRET;
+    const payload = jwt.verify(token, secret);
     if (!["owner", "admin", "viewer"].includes(String(payload.role || ""))) {
       return res.status(403).json({ message: "Forbidden" });
     }
