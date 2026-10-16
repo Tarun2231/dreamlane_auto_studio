@@ -3,7 +3,7 @@ import { getSupabase } from "../../../lib/supabase";
 
 export default async function handler(req, res) {
   const supabase = getSupabase();
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://zjhlymssrpcawajhfpfg.supabase.co";
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://zjhlvmssrpcawajhfpfg.supabase.co";
 
   const results = {
     timestamp: new Date().toISOString(),

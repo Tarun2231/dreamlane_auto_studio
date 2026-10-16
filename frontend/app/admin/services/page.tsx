@@ -93,15 +93,28 @@ export default function AdminServicesPage() {
 
   const create = async (e: FormEvent) => {
     e.preventDefault();
+    if (!form.name.trim()) {
+      setMessage({ type: "err", text: "Please provide a service name." });
+      return;
+    }
+    if (!form.description.trim()) {
+      setMessage({ type: "err", text: "Please provide a service description." });
+      return;
+    }
     setBusy(true);
     setMessage(null);
     try {
-      await adminApi.post("/service", payloadFromForm(form));
+      const res = await adminApi.post("/service", payloadFromForm(form));
+      if (!res.data || (!res.data.id && !res.data._id)) {
+        throw new Error("Invalid response from server");
+      }
       setForm(empty);
       await load();
-      setMessage({ type: "ok", text: "Service added." });
-    } catch {
-      setMessage({ type: "err", text: "Could not create service. Check auth and try again." });
+      setMessage({ type: "ok", text: "Service added successfully." });
+    } catch (err: unknown) {
+      const ax = err as { response?: { data?: { message?: string } } };
+      const msg = ax.response?.data?.message || "Could not create service. Check auth and try again.";
+      setMessage({ type: "err", text: msg });
     } finally {
       setBusy(false);
     }
@@ -141,15 +154,28 @@ export default function AdminServicesPage() {
   const saveEdit = async (e: FormEvent) => {
     e.preventDefault();
     if (!editingId) return;
+    if (!editForm.name.trim()) {
+      setMessage({ type: "err", text: "Please provide a service name." });
+      return;
+    }
+    if (!editForm.description.trim()) {
+      setMessage({ type: "err", text: "Please provide a service description." });
+      return;
+    }
     setBusy(true);
     setMessage(null);
     try {
-      await adminApi.put(`/service/${editingId}`, payloadFromForm(editForm));
+      const res = await adminApi.put(`/service/${editingId}`, payloadFromForm(editForm));
+      if (!res.data) {
+        throw new Error("Invalid response from server");
+      }
       setEditingId(null);
       await load();
-      setMessage({ type: "ok", text: "Service updated." });
-    } catch {
-      setMessage({ type: "err", text: "Update failed." });
+      setMessage({ type: "ok", text: "Service updated successfully." });
+    } catch (err: unknown) {
+      const ax = err as { response?: { data?: { message?: string } } };
+      const msg = ax.response?.data?.message || "Update failed.";
+      setMessage({ type: "err", text: msg });
     } finally {
       setBusy(false);
     }

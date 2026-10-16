@@ -7,7 +7,7 @@ const { createClient } = require("@supabase/supabase-js");
 const supabaseUrl =
   process.env.NEXT_PUBLIC_SUPABASE_URL ||
   process.env.SUPABASE_URL ||
-  "https://zjhlymssrpcawajhfpfg.supabase.co";
+  "https://zjhlvmssrpcawajhfpfg.supabase.co";
 
 const supabaseKey =
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
@@ -229,6 +229,7 @@ readLocalStore();
  * =========================================================================
  */
 async function getServices() {
+  readLocalStore();
   if (supabase) {
     try {
       const { data, error } = await supabase
@@ -238,7 +239,7 @@ async function getServices() {
         .order("base_price", { ascending: true });
 
       if (!error && Array.isArray(data) && data.length > 0) {
-        return data.map((s) => ({
+        const supaList = data.map((s) => ({
           _id: s.id,
           id: s.id,
           name: s.name,
@@ -251,9 +252,15 @@ async function getServices() {
           followUpMonths: s.follow_up_months,
           isActive: s.is_active,
         }));
+
+        const supaIds = new Set(supaList.map((s) => s.id));
+        const localOnly = inMemoryStore.services.filter(
+          (s) => s.isActive !== false && !supaIds.has(s._id) && !supaIds.has(s.id)
+        );
+        return [...supaList, ...localOnly];
       }
-    } catch {
-      // Fallback
+    } catch (err) {
+      console.warn("[supabaseDb] getServices fallback:", err?.message);
     }
   }
   return inMemoryStore.services.filter((s) => s.isActive !== false);
@@ -262,6 +269,144 @@ async function getServices() {
 async function getServiceById(id) {
   const all = await getServices();
   return all.find((s) => s._id === id || s.id === id) || null;
+}
+
+async function createService(payload) {
+  readLocalStore();
+  let id = `svc-${Date.now()}`;
+  const now = new Date().toISOString();
+
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from("services")
+        .insert([{
+          name: String(payload.name || "").trim(),
+          description: String(payload.description || "").trim(),
+          image: String(payload.image || "").trim() || "/images/services/placeholder-service.png",
+          base_price: Number(payload.basePrice || 0),
+          duration: Number(payload.duration || 60),
+          follow_up_months: payload.followUpMonths ? Number(payload.followUpMonths) : null,
+          is_active: payload.isActive !== false,
+        }])
+        .select()
+        .single();
+
+      if (!error && data && data.id) {
+        id = data.id;
+      } else if (error) {
+        console.warn("[supabaseDb] createService Supabase error:", error.message || error);
+      }
+    } catch (err) {
+      console.warn("[supabaseDb] createService Supabase exception:", err?.message || err);
+    }
+  }
+
+  const newService = {
+    _id: id,
+    id: id,
+    name: String(payload.name || "").trim(),
+    description: String(payload.description || "").trim(),
+    image: String(payload.image || "").trim() || "/images/services/placeholder-service.png",
+    basePrice: Number(payload.basePrice || 0),
+    price: Number(payload.basePrice || 0),
+    duration: Number(payload.duration || 60),
+    durationText: `${payload.duration || 60} mins`,
+    followUpMonths: payload.followUpMonths ? Number(payload.followUpMonths) : null,
+    isActive: payload.isActive !== false,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  inMemoryStore.services.push(newService);
+  writeLocalStore();
+
+  return newService;
+}
+
+async function updateService(id, updates) {
+  readLocalStore();
+  const service = inMemoryStore.services.find((s) => s._id === id || s.id === id);
+  const now = new Date().toISOString();
+
+  if (service) {
+    if (updates.name !== undefined) service.name = String(updates.name).trim();
+    if (updates.description !== undefined) service.description = String(updates.description).trim();
+    if (updates.image !== undefined) service.image = String(updates.image).trim();
+    if (updates.basePrice !== undefined) {
+      service.basePrice = Number(updates.basePrice);
+      service.price = Number(updates.basePrice);
+    }
+    if (updates.duration !== undefined) {
+      service.duration = Number(updates.duration);
+      service.durationText = `${updates.duration} mins`;
+    }
+    if (updates.followUpMonths !== undefined) {
+      service.followUpMonths = updates.followUpMonths ? Number(updates.followUpMonths) : null;
+    }
+    if (updates.isActive !== undefined) service.isActive = Boolean(updates.isActive);
+    service.updatedAt = now;
+    writeLocalStore();
+  }
+
+  if (supabase) {
+    try {
+      const supaUpdates = {};
+      if (updates.name !== undefined) supaUpdates.name = String(updates.name).trim();
+      if (updates.description !== undefined) supaUpdates.description = String(updates.description).trim();
+      if (updates.image !== undefined) supaUpdates.image = String(updates.image).trim();
+      if (updates.basePrice !== undefined) supaUpdates.base_price = Number(updates.basePrice);
+      if (updates.duration !== undefined) supaUpdates.duration = Number(updates.duration);
+      if (updates.followUpMonths !== undefined) {
+        supaUpdates.follow_up_months = updates.followUpMonths ? Number(updates.followUpMonths) : null;
+      }
+      if (updates.isActive !== undefined) supaUpdates.is_active = Boolean(updates.isActive);
+      supaUpdates.updated_at = now;
+
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+      if (isUUID) {
+        const { error } = await supabase.from("services").update(supaUpdates).eq("id", id);
+        if (error) {
+          console.warn("[supabaseDb] updateService Supabase error:", error.message || error);
+        }
+      }
+    } catch (err) {
+      console.warn("[supabaseDb] updateService Supabase exception:", err?.message || err);
+    }
+  }
+
+  return service || {
+    _id: id,
+    id,
+    name: updates.name,
+    description: updates.description,
+    image: updates.image,
+    basePrice: Number(updates.basePrice || 0),
+    duration: Number(updates.duration || 60),
+    followUpMonths: updates.followUpMonths,
+  };
+}
+
+async function deleteService(id) {
+  readLocalStore();
+  inMemoryStore.services = inMemoryStore.services.filter((s) => s._id !== id && s.id !== id);
+  writeLocalStore();
+
+  if (supabase) {
+    try {
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+      if (isUUID) {
+        const { error } = await supabase.from("services").delete().eq("id", id);
+        if (error) {
+          console.warn("[supabaseDb] deleteService Supabase error:", error.message || error);
+        }
+      }
+    } catch (err) {
+      console.warn("[supabaseDb] deleteService Supabase exception:", err?.message || err);
+    }
+  }
+
+  return true;
 }
 
 /**
@@ -898,6 +1043,9 @@ module.exports = {
   getSupabaseClient: () => supabase,
   getServices,
   getServiceById,
+  createService,
+  updateService,
+  deleteService,
   getSlots,
   createBooking,
   getBookingById,

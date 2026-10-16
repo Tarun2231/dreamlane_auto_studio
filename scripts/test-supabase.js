@@ -12,7 +12,7 @@ const { createClient } = require("@supabase/supabase-js");
 const url =
   process.env.NEXT_PUBLIC_SUPABASE_URL ||
   process.env.SUPABASE_URL ||
-  "https://zjhlymssrpcawajhfpfg.supabase.co";
+  "https://zjhlvmssrpcawajhfpfg.supabase.co";
 
 const key =
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
